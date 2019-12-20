@@ -1,4 +1,4 @@
 # gwb-dc-inversions
 Examples of 1D and 2D inversions for Geoscience Without Border Projects at Myanmar
 
-To run notebooks, it is required use `simpeg@dc1d` branch
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/simpeg-research/gwb-dc-inversions/master?filepath=notebooks)
