@@ -12,6 +12,8 @@ dependencies:
   - requests
   - mkl
   - dask
+  - zarr
+  - sparse
   - pip:
     - pymatsolver
     - discretize
