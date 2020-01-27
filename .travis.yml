@@ -18,4 +18,4 @@ install:
   - pip install testipynb pytest
 
 script:
-  - travis_wait 35 pytest tests -v -s
+  - travis_wait 35 pytest tests -v
