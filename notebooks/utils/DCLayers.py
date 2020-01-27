@@ -8,7 +8,7 @@ import ipywidgets
 from ipywidgets import FloatSlider, FloatText, ToggleButtons
 
 import matplotlib.pyplot as plt
-from matplotlib.colors import LogNorm
+from matplotlib.colors import LogNorm, SymLogNorm
 from matplotlib import rcParams
 
 import discretize
@@ -79,10 +79,11 @@ def layer_potentials(rho1, rho2, h, A, B, xyz):
             1 + 2 * sum_term(rho1, rho2, h, r(xyz, src_loc))
         )
 
-    VA = V(1.0, A)
-    VB = V(-1.0, B)
+    pot = V(1.0, A)
+    if B is not None:
+        pot += V(-1.0, B)
 
-    return VA + VB
+    return pot
 
 
 def layer_E(rho1, rho2, h, A, B, xyz):
@@ -115,9 +116,13 @@ def layer_E(rho1, rho2, h, A, B, xyz):
     def Ez(I, src_loc):
         return Er(I, r(xyz, src_loc)) * dr_dz(src_loc)
 
-    ex = Ex(1.0, A) + Ex(-1.0, B)
-    ey = Ey(1.0, A) + Ey(-1.0, B)
-    ez = Ez(1.0, A) + Ez(-1.0, B)
+    ex = Ex(1.0, A)
+    ey = Ey(1.0, A)
+    ez = Ez(1.0, A)
+    if B is not None:
+        ex += Ex(-1.0, B)
+        ey += Ey(-1.0, B)
+        ez += Ez(-1.0, B)
 
     return ex, ey, ez
 
@@ -137,42 +142,82 @@ def G(A, B, M, N):
     """
     Geometric factor
     """
-    return 1.0 / (
-        1.0 / (np.abs(A - M) + eps)
-        - 1.0 / (np.abs(M - B) + eps)
-        - 1.0 / (np.abs(N - A) + eps)
-        + 1.0 / (np.abs(N - B) + eps)
-    )
+    bot = 1.0 / (np.abs(A[0] - M) + eps)
+    if B is not None:
+        bot -= 1.0 / (np.abs(M - B[0]) + eps)
+    if N is not None:
+        bot -= 1.0 / (np.abs(N - A[0]) + eps)
+        if B is not None:
+            bot += 1.0 / (np.abs(N - B[0]) + eps)
+    return 1.0 / bot
 
 
 def rho_a(VM, VN, A, B, M, N):
     """
     Apparent Resistivity
     """
-    return (VM - VN) * 2.0 * np.pi * G(A, B, M, N)
+    if VN is None:
+        return VM * 2.0 * np.pi * G(A, B, M, None)
+    else:
+        return (VM - VN) * 2.0 * np.pi * G(A, B, M, N)
 
 
 def solve_2D_potentials(rho1, rho2, h, A, B):
     """
-    Here we solve the 2D DC problem for potentials (using SimPEG Mesg Class)
+    Here we solve the 2D DC problem for potentials (using SimPEG Mesh Class)
     """
     sigma = 1.0 / rho2 * np.ones(mesh.nC)
     sigma[mesh.gridCC[:, 1] >= -h] = 1.0 / rho1  # since the model is 2D
 
     q = np.zeros(mesh.nC)
     a = utils.closestPoints(mesh, A[:2])
-    b = utils.closestPoints(mesh, B[:2])
-
     q[a] = 1.0 / mesh.vol[a]
-    q[b] = -1.0 / mesh.vol[b]
+    if B is not None:
+        b = utils.closestPoints(mesh, B[:2])
+        q[b] = -1.0 / mesh.vol[b]
 
-    # q = q * 1./mesh.vol
+
+    # Use a Neumann Boundary Condition (so pole source is reasonable)
+    fxm, fxp, fym, fyp = mesh.faceBoundaryInd
+
+    n_xm = fxm.sum()
+    n_xp = fxp.sum()
+    n_ym = fym.sum()
+    n_yp = fyp.sum()
+
+    xBC_xm = np.zeros(n_xm) # 0.5*a_xm
+    xBC_xp = np.zeros(n_xp) # 0.5*a_xp/b_xp
+    yBC_xm = np.ones(n_xm) # 0.5*(1.-b_xm)
+    yBC_xp = np.ones(n_xp) # 0.5*(1.-1./b_xp)
+    xBC_ym = np.zeros(n_ym) # 0.5*a_ym
+    xBC_yp = np.zeros(n_yp) # 0.5*a_yp/b_yp
+    yBC_ym = np.ones(n_ym) # 0.5*(1.-b_ym)
+    yBC_yp = np.ones(n_yp) # 0.5*(1.-1./b_yp)
+
+    sortindsfx = np.argsort(np.r_[np.arange(mesh.nFx)[fxm],
+                                  np.arange(mesh.nFx)[fxp]])
+    sortindsfy = np.argsort(np.r_[np.arange(mesh.nFy)[fym],
+                                  np.arange(mesh.nFy)[fyp]])
+    xBC_x = np.r_[xBC_xm, xBC_xp][sortindsfx]
+    xBC_y = np.r_[xBC_ym, xBC_yp][sortindsfy]
+    yBC_x = np.r_[yBC_xm, yBC_xp][sortindsfx]
+    yBC_y = np.r_[yBC_ym, yBC_yp][sortindsfy]
+    x_BC = np.r_[xBC_x, xBC_y]
+    y_BC = np.r_[yBC_x, yBC_y]
+
+    V = utils.sdiag(mesh.vol)
+    Div = V * mesh.faceDiv
+    P_BC, B = mesh.getBCProjWF_simple()
+    M = B*mesh.aveCC2F
+    Grad = Div.T - P_BC*utils.sdiag(y_BC)*M
 
     A = (
-        mesh.cellGrad.T
+        Div
         * utils.sdiag(1.0 / (mesh.dim * mesh.aveF2CC.T * (1.0 / sigma)))
-        * mesh.cellGrad
+        * Grad
     )
+
+    A[0, 0] = A[0, 0] + 1. # Because Neumann
     Ainv = Pardiso(A)
 
     V = Ainv * q
@@ -201,7 +246,7 @@ def solve_2D_J(rho1, rho2, h, A, B):
     return utils.sdiag(sigma) * ex, utils.sdiag(sigma) * ez, V
 
 
-def plot_layer_potentials(rho1, rho2, h, A, B, M, N, imgplt="Model"):
+def plot_layer_potentials(survey_type, rho1, rho2, h, A, B, M, N, imgplt="Model"):
 
     markersize = 8.0
     fontsize = 16.0
@@ -217,56 +262,73 @@ def plot_layer_potentials(rho1, rho2, h, A, B, M, N, imgplt="Model"):
     xplt = pltgrid[:, 0].reshape(x.size, z.size, order="F")
     zplt = pltgrid[:, 1].reshape(x.size, z.size, order="F")
 
+    source_type, receiver_type = survey_type.split('-')
+    dipole_source = source_type == 'Dipole'
+    dipole_receiver = receiver_type == 'Dipole'
+
+    A_loc = np.r_[A, 0.0, 0.0]
+    if dipole_source:
+        B_loc = np.r_[B, 0.0, 0.0]
+    else:
+        B_loc = None
+
     V = layer_potentials(
         rho1,
         rho2,
         h,
-        np.r_[A, 0.0, 0.0],
-        np.r_[B, 0.0, 0.0],
+        A_loc,
+        B_loc,
         utils.ndgrid(x, np.r_[0.0], np.r_[0.0]),
     )
     VM = layer_potentials(
         rho1,
         rho2,
         h,
-        np.r_[A, 0.0, 0.0],
-        np.r_[B, 0.0, 0.0],
+        A_loc,
+        B_loc,
         utils.mkvc(np.r_[M, 0.0, 0], 2).T,
     )
-    VN = layer_potentials(
-        rho1,
-        rho2,
-        h,
-        np.r_[A, 0.0, 0.0],
-        np.r_[B, 0.0, 0.0],
-        utils.mkvc(np.r_[N, 0.0, 0], 2).T,
-    )
+    if dipole_receiver:
+        VN = layer_potentials(
+            rho1,
+            rho2,
+            h,
+            A_loc,
+            B_loc,
+            utils.mkvc(np.r_[N, 0.0, 0], 2).T,
+        )
+    else:
+        VN = None
 
     ax[0].plot(x, V, color=[0.1, 0.5, 0.1], linewidth=2)
     ax[0].grid(
         which="both", linestyle="-", linewidth=0.5, color=[0.2, 0.2, 0.2], alpha=0.5
     )
     ax[0].plot(A, 0, "+", markersize=12, markeredgewidth=3, color=[1.0, 0.0, 0])
-    ax[0].plot(B, 0, "_", markersize=12, markeredgewidth=3, color=[0.0, 0.0, 1.0])
+    if dipole_source:
+        ax[0].plot(B, 0, "_", markersize=12, markeredgewidth=3, color=[0.0, 0.0, 1.0])
     ax[0].set_ylabel("Potential, (V)")
     ax[0].set_xlabel("x (m)")
     ax[0].set_xlim([x.min(), x.max()])
     ax[0].set_ylim(ylim)
 
     ax[0].plot(M, VM, "o", color="k")
-    ax[0].plot(N, VN, "o", color="k")
+    if dipole_receiver:
+        ax[0].plot(N, VN, "o", color="k")
 
     props = dict(boxstyle="round", facecolor="grey", alpha=0.3)
 
     txtsp = 1
 
     xytextM = (M + 0.5, np.max([np.min([VM, ylim.max()]), ylim.min()]) + 0.5)
-    xytextN = (N + 0.5, np.max([np.min([VN, ylim.max()]), ylim.min()]) + 0.5)
+    if dipole_receiver:
+        xytextN = (N + 0.5, np.max([np.min([VN, ylim.max()]), ylim.min()]) + 0.5)
 
     props = dict(boxstyle="round", facecolor="grey", alpha=0.4)
 
     ax[0].annotate("%2.1e" % (VM), xy=xytextM, xytext=xytextM)
-    ax[0].annotate("%2.1e" % (VN), xy=xytextN, xytext=xytextN)
+    if dipole_receiver:
+        ax[0].annotate("%2.1e" % (VN), xy=xytextN, xytext=xytextN)
 
     # ax[0].plot(np.r_[M, N], np.ones(2)*VN, color='k')
     # ax[0].plot(np.r_[M, M], np.r_[VM, VN], color='k')
@@ -276,11 +338,12 @@ def plot_layer_potentials(rho1, rho2, h, A, B, M, N, imgplt="Model"):
     ax[0].text(
         x.max() + 1,
         ylim.max() - 0.1 * ylim.max(),
-        "$\\rho_a$ = %2.2f" % (rho_a(VM, VN, A, B, M, N)),
+        "$\\rho_a$ = %2.2f" % (rho_a(VM, VN, A_loc, B_loc, M, N)),
         verticalalignment="bottom",
         bbox=props,
     )
 
+    match_point = 0 # np.searchsorted(x, M) #  make potential match at point A
     if imgplt == "Model":
         model = rho2 * np.ones(pltgrid.shape[0])
         model[pltgrid[:, 1] >= -h] = rho1
@@ -308,7 +371,7 @@ def plot_layer_potentials(rho1, rho2, h, A, B, M, N, imgplt="Model"):
     elif imgplt == "Potential":
         Pc = mesh.getInterpolationMat(pltgrid, "CC")
 
-        V = solve_2D_potentials(rho1, rho2, h, np.r_[A, 0.0, 0.0], np.r_[B, 0.0, 0.0])
+        V = solve_2D_potentials(rho1, rho2, h, A_loc, B_loc)
 
         Vplt = Pc * V
         Vplt = Vplt.reshape(x.size, z.size, order="F")
@@ -316,19 +379,19 @@ def plot_layer_potentials(rho1, rho2, h, A, B, M, N, imgplt="Model"):
         # since we are using a strictly 2D code, the potnetials at the surface
         # do not match the analytic, so we scale the potentials to match the
         # analytic 2.5D result at the surface.
-        fudgeFactor = (
-            layer_potentials(
-                rho1,
-                rho2,
-                h,
-                np.r_[A, 0.0, 0.0],
-                np.r_[B, 0.0, 0.0],
-                np.c_[x.min(), 0.0, 0.0],
-            )
-            / Vplt[0, 0]
-        )
+        fudgeFactor = layer_potentials(
+            rho1,
+            rho2,
+            h,
+            A_loc,
+            B_loc,
+            np.c_[x[match_point], 0.0, 0.0],
+        )/Vplt[match_point, 0]
 
-        cb = ax[1].pcolor(xplt, zplt, Vplt * fudgeFactor, cmap="viridis")
+        norm = SymLogNorm(linthresh=15)#vmin=-1.0, vmax=1.0)
+
+        cb = ax[1].pcolormesh(xplt, zplt, Vplt * fudgeFactor, cmap="viridis",
+                norm=norm)
         ax[1].plot(
             [xplt.min(), xplt.max()],
             -h * np.r_[1.0, 1],
@@ -337,14 +400,15 @@ def plot_layer_potentials(rho1, rho2, h, A, B, M, N, imgplt="Model"):
         )
         ax[1].contour(xplt, zplt, np.abs(Vplt), colors="k", alpha=0.5)
         ax[1].set_ylabel("z (m)", fontsize=16)
-        clim = np.r_[-15.0, 15.0]
+        #if dipole_source:
+        #    clim = np.r_[-15.0, 15.0]
         clabel = "Potential (V)"
 
     elif imgplt == "E":
 
         Pc = mesh.getInterpolationMat(pltgrid, "CC")
 
-        ex, ez, V = solve_2D_E(rho1, rho2, h, np.r_[A, 0.0, 0.0], np.r_[B, 0.0, 0.0])
+        ex, ez, V = solve_2D_E(rho1, rho2, h, A_loc, B_loc)
 
         ex, ez = Pc * ex, Pc * ez
         Vplt = (Pc * V).reshape(x.size, z.size, order="F")
@@ -353,11 +417,11 @@ def plot_layer_potentials(rho1, rho2, h, A, B, M, N, imgplt="Model"):
                 rho1,
                 rho2,
                 h,
-                np.r_[A, 0.0, 0.0],
-                np.r_[B, 0.0, 0.0],
-                np.c_[x.min(), 0.0, 0.0],
+                A_loc,
+                B_loc,
+                np.c_[x[match_point], 0.0, 0.0],
             )
-            / Vplt[0, 0]
+            / Vplt[match_point, 0]
         )
 
         # ex, ez, _ = layer_E(rho1, rho2, h, np.r_[A, 0., 0.], np.r_[B, 0., 0.], np.c_[pltgrid, np.zeros_like(pltgrid[:, 0])])
@@ -372,7 +436,9 @@ def plot_layer_potentials(rho1, rho2, h, A, B, M, N, imgplt="Model"):
             color=[0.5, 0.5, 0.5],
             linewidth=1.5,
         )
-        clim = np.r_[3e-3, 1e1]
+
+        #if dipole_source:
+        #    clim = np.r_[3e-3, 1e1]
 
         ax[1].streamplot(
             x,
@@ -391,7 +457,7 @@ def plot_layer_potentials(rho1, rho2, h, A, B, M, N, imgplt="Model"):
 
         Pc = mesh.getInterpolationMat(pltgrid, "CC")
 
-        Jx, Jz, V = solve_2D_J(rho1, rho2, h, np.r_[A, 0.0, 0.0], np.r_[B, 0.0, 0.0])
+        Jx, Jz, V = solve_2D_J(rho1, rho2, h, A_loc, B_loc)
 
         Jx, Jz = Pc * Jx, Pc * Jz
 
@@ -401,11 +467,11 @@ def plot_layer_potentials(rho1, rho2, h, A, B, M, N, imgplt="Model"):
                 rho1,
                 rho2,
                 h,
-                np.r_[A, 0.0, 0.0],
-                np.r_[B, 0.0, 0.0],
-                np.c_[x.min(), 0.0, 0.0],
+                A_loc,
+                B_loc,
+                np.c_[x[match_point], 0.0, 0.0],
             )
-            / Vplt[0, 0]
+            / Vplt[match_point, 0]
         )
 
         Jx = fudgeFactor * Jx.reshape(x.size, z.size, order="F")
@@ -432,7 +498,8 @@ def plot_layer_potentials(rho1, rho2, h, A, B, M, N, imgplt="Model"):
         )
         ax[1].set_ylabel("z (m)", fontsize=16)
 
-        clim = np.r_[3e-5, 3e-2]
+        #if dipole_source:
+        #    clim = np.r_[3e-5, 3e-2]
         clabel = "Current Density (A/m$^2$)"
 
     ax[1].set_xlim([x.min(), x.max()])
@@ -445,19 +512,22 @@ def plot_layer_potentials(rho1, rho2, h, A, B, M, N, imgplt="Model"):
     ax[1].set_xlabel("x(m)", fontsize=16)
 
     xytextA1 = (A - 0.75, 2.5)
-    xytextB1 = (B - 0.75, 2.5)
-    xytextM1 = (M - 0.75, 2.5)
-    xytextN1 = (N - 0.75, 2.5)
-
     ax[1].plot(A, 1.0, marker="v", color="red", markersize=markersize)
-    ax[1].plot(B, 1.0, marker="v", color="blue", markersize=markersize)
-    ax[1].plot(M, 1.0, marker="^", color="yellow", markersize=markersize)
-    ax[1].plot(N, 1.0, marker="^", color="green", markersize=markersize)
-
     ax[1].annotate("A", xy=xytextA1, xytext=xytextA1, fontsize=fontsize)
-    ax[1].annotate("B", xy=xytextB1, xytext=xytextB1, fontsize=fontsize)
+
+    if dipole_source:
+        xytextB1 = (B - 0.75, 2.5)
+        ax[1].plot(B, 1.0, marker="v", color="blue", markersize=markersize)
+        ax[1].annotate("B", xy=xytextB1, xytext=xytextB1, fontsize=fontsize)
+
+    xytextM1 = (M - 0.75, 2.5)
+    ax[1].plot(M, 1.0, marker="^", color="yellow", markersize=markersize)
     ax[1].annotate("M", xy=xytextM1, xytext=xytextM1, fontsize=fontsize)
-    ax[1].annotate("N", xy=xytextN1, xytext=xytextN1, fontsize=fontsize)
+
+    if dipole_receiver:
+        xytextN1 = (N - 0.75, 2.5)
+        ax[1].plot(N, 1.0, marker="^", color="green", markersize=markersize)
+        ax[1].annotate("N", xy=xytextN1, xytext=xytextN1, fontsize=fontsize)
 
     plt.tight_layout()
     plt.show()
@@ -465,11 +535,15 @@ def plot_layer_potentials(rho1, rho2, h, A, B, M, N, imgplt="Model"):
 
 
 def plot_layer_potentials_app():
-    def plot_layer_potentials_interact(A, B, M, N, rho1, rho2, h, Plot):
-        return plot_layer_potentials(rho1, rho2, h, A, B, M, N, Plot)
+    def plot_layer_potentials_interact(survey, A, B, M, N, rho1, rho2, h, Plot):
+        return plot_layer_potentials(survey, rho1, rho2, h, A, B, M, N, Plot)
 
     app = widgetify(
         plot_layer_potentials_interact,
+        survey=ToggleButtons(
+            options=["Dipole-Dipole", "Dipole-Pole", "Pole-Dipole", "Pole-Pole"],
+            value="Dipole-Dipole",
+        ),
         A=FloatSlider(
             min=-40.0, max=40.0, step=1.0, value=-30.0, continuous_update=False
         ),
