@@ -95,26 +95,10 @@ def model_fields(survey_type, a_spacing, array_center, xc, zc, r, rhoHalf, rhoTa
                 Solver=Pardiso,
                 survey=survey
                 )
-    """
-    problem_prim = DC.Problem2D_CC(
-                mesh,
-                sigmaMap=mapping,
-                Solver=Pardiso,
-                survey=survey
-                )
-    """
 
     mesh.setCellGradBC("neumann")
     cellGrad = mesh.cellGrad
     faceDiv = mesh.faceDiv
-
-    """
-    phi_primary = problem_prim.dpred(mhalf)
-    e_primary = -cellGrad * phi_primary
-    j_primary = problem_prim.MfRhoI * problem_prim.Grad * phi_primary
-    q_primary = epsilon_0 * problem_prim.Vol * (faceDiv * e_primary)
-    primary_field = {"phi": phi_primary, "e": e_primary, "j": j_primary, "q": q_primary}
-    """
 
     phi_total = problem.dpred(mtrue)
     e_total = -cellGrad * phi_total

@@ -15,10 +15,7 @@ import discretize
 from SimPEG import maps, utils
 
 from pymatsolver import Pardiso
-#from SimPEG import Mesh, Maps, SolverLU, Utils
 from SimPEG.utils import ExtractCoreMesh
-#from SimPEG.Utils import ExtractCoreMesh
-#from SimPEG.EM.Static import DC
 from SimPEG.electromagnetics.static import resistivity as DC
 from SimPEG.utils import ModelBuilder
 
@@ -57,13 +54,58 @@ indy = (
     & (mesh.gridFy[:, 1] <= ymax)
 )
 indF = np.concatenate((indx, indy))
-last_h0 = np.nan
-last_h1 = np.nan
-last_rho0 = np.nan
-last_rho1 = np.nan
-last_rho2 = np.nan
-last_A = np.nan
-last_B = np.nan
+
+
+def model_soundings(h0, h1, rho0, rho1, rho2):
+    hz = np.r_[h0, h1]
+    rho = np.r_[rho0, rho1, rho2]
+
+    srcList_w = []
+    srcList_s = []
+    AB2 = np.arange(4, 89, 3)+0.5
+    for i, a in enumerate(AB2):
+        a_loc = a
+        b_loc = -a
+        m_loc_wen = a - (a*2)//3
+        n_loc_wen = -m_loc_wen
+
+        m_loc_sch = 1.5
+        n_loc_sch = -1.5
+        rx_w = DC.Rx.Dipole(np.r_[m_loc_wen, 0, 0], np.r_[n_loc_wen, 0, 0])
+        rx_s = DC.Rx.Dipole(np.r_[m_loc_sch, 0, 0], np.r_[n_loc_sch, 0, 0])
+
+        locA = np.r_[a_loc, 0, 0]
+        locB = np.r_[b_loc, 0, 0]
+        src = DC.Src.Dipole([rx_w], locA, locB)
+        srcList_w.append(src)
+        src = DC.Src.Dipole([rx_s], locA, locB)
+        srcList_s.append(src)
+
+
+    m = np.r_[rho, hz]
+
+    wires = maps.Wires(('rho', rho.size), ('t', rho.size-1))
+    mapping_rho = maps.IdentityMap(nP=rho.size) * wires.rho
+    mapping_t = maps.IdentityMap(nP=hz.size) * wires.t
+
+    survey = DC.Survey(srcList_w)
+    simulation = DC.DCSimulation_1D(
+        rhoMap=mapping_rho,
+        thicknessesMap=mapping_t,
+        survey=survey,
+        data_type='apparent_resistivity'
+    )
+    data_w = simulation.makeSyntheticData(m)
+
+    survey = DC.Survey(srcList_s)
+    simulation = DC.DCSimulation_1D(
+        rhoMap=mapping_rho,
+        thicknessesMap=mapping_t,
+        survey=survey,
+        data_type='apparent_resistivity'
+    )
+    data_s = simulation.makeSyntheticData(m)
+    return data_w, data_s
 
 
 def model_fields(A, B, h0, h1, rho0, rho1, rho2):
@@ -102,58 +144,7 @@ def model_fields(A, B, h0, h1, rho0, rho1, rho2):
     q_total = epsilon_0 * problem.Vol * (faceDiv * e_total)
     total_field = {"phi": phi_total, "e": e_total, "j": j_total, "q": q_total}
 
-    return resistivity_model, src, total_field
-
-def get_Surface_Potentials(survey, src, field_obj):
-
-    phi = field_obj["phi"]
-    CCLoc = mesh.gridCC
-    zsurfaceLoc = np.max(CCLoc[:, 1])
-    surfaceInd = np.where(CCLoc[:, 1] == zsurfaceLoc)
-    xSurface = CCLoc[surfaceInd, 0].T
-    phiSurface = phi[surfaceInd]
-    phiScale = 0.0
-
-    if survey == "Pole-Dipole" or survey == "Pole-Pole":
-        refInd = utils.closestPoints(mesh, [xmax + 60.0, 0.0], gridLoc="CC")
-        # refPoint =  CCLoc[refInd]
-        # refSurfaceInd = np.where(xSurface == refPoint[0])
-        # phiScale = np.median(phiSurface)
-        phiScale = phi[refInd]
-        phiSurface = phiSurface - phiScale
-
-    return xSurface, phiSurface, phiScale
-
-# The only thing we need to make it work is a 2.5D field object in SimPEG
-
-
-def getSensitivity(survey, A, B, M, N, model):
-
-    if survey == "Dipole-Dipole":
-        rx = DC.Rx.Dipole_ky(np.r_[M, 0.0], np.r_[N, 0.0])
-        src = DC.Src.Dipole([rx], np.r_[A, 0.0], np.r_[B, 0.0])
-    elif survey == "Pole-Dipole":
-        rx = DC.Rx.Dipole_ky(np.r_[M, 0.0], np.r_[N, 0.0])
-        src = DC.Src.Pole([rx], np.r_[A, 0.0])
-    elif survey == "Dipole-Pole":
-        rx = DC.Rx.Pole_ky(np.r_[M, 0.0])
-        src = DC.Src.Dipole([rx], np.r_[A, 0.0], np.r_[B, 0.0])
-    elif survey == "Pole-Pole":
-        rx = DC.Rx.Pole_ky(np.r_[M, 0.0])
-        src = DC.Src.Pole([rx], np.r_[A, 0.0])
-
-    survey = DC.Survey_ky([src])
-    problem = DC.Problem2D_CC(
-                mesh,
-                sigmaMap=mapping,
-                Solver=Pardiso,
-                survey=survey
-                )
-    fieldObj = problem.fields(model)
-
-    J = problem.Jtvec(model, np.array([1.0]), f=fieldObj)
-
-    return J
+    return src, total_field
 
 
 def calculateRhoA(survey, VM, VN, A, B, M, N):
@@ -183,10 +174,7 @@ def calculateRhoA(survey, VM, VN, A, B, M, N):
 
 def PLOT(
     survey,
-    A,
-    B,
-    M,
-    N,
+    AB2,
     h0,
     h1,
     rho0,
@@ -196,86 +184,56 @@ def PLOT(
     Type,
     Scale,
 ):
-    global last_A, last_B, last_h0, last_h1, last_rho0, last_rho1, last_rho2
-    global last_mtrue, last_src, last_total_field
     labelsize = 16.0
     ticksize = 16.0
 
-    if survey == "Pole-Dipole" or survey == "Pole-Pole":
-        B = []
+    survey_type = survey
+    survey = 'Dipole-Dipole'
 
-    if (last_A!=A or last_B!=B or
-        last_h0!=h0 or last_h1!=h1 or
-        last_rho0!=rho1 or last_rho1!=rho1 or last_rho2!=rho2):
-        last_mtrue, last_src, last_total_field = model_fields(
+    A = AB2
+    B = -AB2
+    if survey_type == 'Wenner':
+        M = AB2 - (AB2*2)//3
+        N = -M
+    else:
+        M = 1.5
+        N = -1.5
+
+    # Calculate resistivity profile
+    ab2s = np.arange(4, 89, 3)+0.5
+    data_w, data_s = model_soundings(h0, h1, rho0, rho1, rho2)
+
+    mtrue = ModelBuilder.layeredModel(
+        mesh.gridCC, np.r_[0., -h0, -(h0+h1)], np.r_[rho0, rho1, rho2]
+    )
+    if Field != 'Model':
+        src, total_field = model_fields(
             A, B, h0, h1, rho0, rho1, rho2
         )
-    mtrue, src, total_field = last_mtrue, last_src, last_total_field
 
-    fig, ax = plt.subplots(2, 1, figsize=(9 * 1.5, 9 * 1.8), sharex=True)
-    fig.subplots_adjust(right=0.8, wspace=0.05, hspace=0.05)
+    fig, ax = plt.subplots(2, 1, figsize=(9 * 1.5, 9 * 1.8))
+    fig.subplots_adjust(right=0.8, wspace=0.05)
 
-    xSurface, phiTotalSurface, phiScaleTotal = get_Surface_Potentials(
-        survey, src, total_field
-    )
-    ylim = np.r_[-1.0, 1.0] * np.max(np.abs(phiTotalSurface))
-    xlim = np.array([-40, 40])
-
-    if survey == "Dipole-Pole" or survey == "Pole-Pole":
-        MInd = np.where(xSurface == M)
-        N = []
-
-        VM = phiTotalSurface[MInd[0]]
-        VN = 0.0
-
+    i_a = np.argmin(np.abs(ab2s-AB2))
+    if survey_type == 'Wenner':
+        rhoa = data_w.dobs[i_a]
     else:
-        MInd = np.where(xSurface == M)
-        NInd = np.where(xSurface == N)
+        rhoa = data_s.dobs[i_a]
 
-        VM = phiTotalSurface[MInd[0]]
-        VN = phiTotalSurface[NInd[0]]
-    # Subplot 1: Full set of surface potentials
-    ax[0].plot(xSurface, phiTotalSurface, color=[0.1, 0.5, 0.1], linewidth=2)
-    ax[0].grid(
-        which="both", linestyle="-", linewidth=0.5, color=[0.2, 0.2, 0.2], alpha=0.5
-    )
+    ax[0].plot(ab2s, data_w.dobs, label='Wenner')
+    ax[0].plot(ab2s, data_s.dobs, label='Schlumberger')
+    ax[0].plot([AB2], [rhoa], marker='*', markersize=labelsize)
+    if rho0==rho1 and rho1==rho2:
+        ax[0].set_xlim([0.9*rho1, 1.1*rho1])
 
-    if survey == "Pole-Dipole" or survey == "Pole-Pole":
-        ax[0].plot(A, 0, "+", markersize=12, markeredgewidth=3, color=[1.0, 0.0, 0])
-    else:
-        ax[0].plot(A, 0, "+", markersize=12, markeredgewidth=3, color=[1.0, 0.0, 0])
-        ax[0].plot(B, 0, "_", markersize=12, markeredgewidth=3, color=[0.0, 0.0, 1.0])
-    ax[0].set_ylabel("Potential, (V)", fontsize=labelsize)
-    ax[0].set_xlabel("x (m)", fontsize=labelsize)
-    ax[0].set_xlim(xlim)
-    ax[0].set_ylim(ylim)
+    xytext = (AB2, 1.01*rhoa)
+    ax[0].annotate(r"$\rho_a$ = {:.2f}".format(rhoa), xy=xytext, fontsize=labelsize)
 
-    if survey == "Dipole-Pole" or survey == "Pole-Pole":
-        ax[0].plot(M, VM, "o", color="k")
-
-        xytextM = (M + 0.5, np.max([np.min([VM, ylim.max()]), ylim.min()]) + 1)
-        ax[0].annotate("%2.1e" % (VM), xy=xytextM, xytext=xytextM, fontsize=labelsize)
-
-    else:
-        ax[0].plot(M, VM, "o", color="k")
-        ax[0].plot(N, VN, "o", color="k")
-
-        xytextM = (M + 0.5, np.max([np.min([VM, ylim.max()]), ylim.min()]) + 10)
-        xytextN = (N + 0.5, np.max([np.min([VN, ylim.max()]), ylim.min()]) + 10)
-        ax[0].annotate("%2.1e" % (VM), xy=xytextM, xytext=xytextM, fontsize=labelsize)
-        ax[0].annotate("%2.1e" % (VN), xy=xytextN, xytext=xytextN, fontsize=labelsize)
-
-    ax[0].tick_params(axis="both", which="major", labelsize=ticksize)
-
-    props = dict(boxstyle="round", facecolor="grey", alpha=0.4)
-    ax[0].text(
-        xlim.max() + 1,
-        ylim.max() - 0.1 * ylim.max(),
-        "$\\rho_a$ = %2.2f" % (calculateRhoA(survey, VM, VN, A, B, M, N)),
-        verticalalignment="bottom",
-        bbox=props,
-        fontsize=14,
-    )
+    ax[0].set_xscale('log')
+    ax[0].set_yscale('log')
+    ax[0].legend()
+    ax[0].set_ylabel(r'$\rho_a$ ($\Omega$m)')
+    ax[0].set_xlabel(r'$\frac{AB}{2}$ (m)')
 
     if Field == "Model":
 
@@ -290,7 +248,7 @@ def PLOT(
         if Scale == "Log":
             pcolorOpts = {"norm": matplotlib.colors.LogNorm(), "cmap": "jet_r"}
 
-        u = 1.0 / (mapping * mtrue)
+        u = mtrue
 
     elif Field == "Potential":
 
@@ -308,7 +266,7 @@ def PLOT(
                 "norm": matplotlib.colors.SymLogNorm(linthresh=linthresh, linscale=0.2),
                 "cmap": "viridis",
             }
-        u = total_field["phi"] - phiScaleTotal
+        u = total_field["phi"]
 
     elif Field == "E":
 
@@ -363,37 +321,13 @@ def PLOT(
         if Type == 'Total':
             u = total_field["q"]
         else:
-            _, __, primary_field = model_fields(
+            _, primary_field = model_fields(
                 A, B, h0, h1, rho0, rho0, rho0
             )
             if Type == 'Primary':
                 u = primary_field['q']
             else:
                 u = total_field['q']-primary_field['q']
-
-
-    elif Field == "Sensitivity":
-
-        label = "Sensitivity"
-        xtype = "CC"
-        view = "real"
-        streamOpts = None
-        ind = indCC
-
-        # formatter = None
-        # pcolorOpts = {"cmap":"viridis"}
-        # formatter = LogFormatter(10, labelOnlyBase=False)
-        pcolorOpts = {"cmap": "viridis"}
-        if Scale == "Log":
-            linthresh = 1e-4
-            pcolorOpts = {
-                "norm": matplotlib.colors.SymLogNorm(linthresh=linthresh, linscale=0.2),
-                "cmap": "viridis",
-            }
-        # formatter = formatter = "$10^{%.1f}$"
-        formatter = "%.1e"
-
-        u = getSensitivity(survey, A, B, M, N, mtrue)
 
     if Scale == "Log":
         eps = 1e-16
@@ -512,10 +446,17 @@ def PLOT(
 def ThreeLayer_app():
     app = widgetify(
         PLOT,
-        manual=True,
         survey=ToggleButtons(
-            options=["Dipole-Dipole", "Dipole-Pole", "Pole-Dipole", "Pole-Pole"],
-            value="Dipole-Dipole",
+            options=["Wenner", "Schlumberger"],
+            value="Wenner",
+        ),
+        AB2=FloatSlider(
+            min=4.5,
+            max=88.5,
+            step=3,
+            value=19.5,
+            continuous_update=False,
+            description="$\\frac{AB}{2}$"
         ),
         h0=FloatSlider(
             min=0.0,
@@ -529,7 +470,7 @@ def ThreeLayer_app():
             min=0,
             max=20.0,
             step=1.0,
-            value=1.0,
+            value=10.0,
             continuous_update=False,
             description="$h_1$",
         ),
@@ -543,7 +484,7 @@ def ThreeLayer_app():
         rho1=FloatText(
             min=1e-8,
             max=1e8,
-            value=5000.0,
+            value=500.0,
             continuous_update=False,
             description="$\\rho_{1}$",
         ),
@@ -554,23 +495,11 @@ def ThreeLayer_app():
             continuous_update=False,
             description="$\\rho_{2}$",
         ),
-        A=FloatSlider(
-            min=-30-cs/2, max=30+cs/2, step=cs, value=-30-cs/2, continuous_update=True
-        ),
-        B=FloatSlider(
-            min=-30-cs/2, max=30+cs/2, step=cs, value=30+cs/2, continuous_update=True
-        ),
-        M=FloatSlider(
-            min=-30-cs/2, max=30+cs/2, step=cs, value=-10-cs/2, continuous_update=True
-        ),
-        N=FloatSlider(
-            min=-30-cs/2, max=30+cs/2, step=cs, value=10+cs/2, continuous_update=True
-        ),
         Field=ToggleButtons(
-            options=["Model", "Potential", "E", "J", "Charge", "Sensitivity"],
+            options=["Model", "Potential", "E", "J", "Charge"],
             value="Model",
         ),
         Type=ToggleButtons(options=["Total", "Primary", "Secondary"], value="Total"),
-        Scale=ToggleButtons(options=["Linear", "Log"], value="Linear"),
+        Scale=ToggleButtons(options=["Linear", "Log"], value="Log"),
     )
     return app
