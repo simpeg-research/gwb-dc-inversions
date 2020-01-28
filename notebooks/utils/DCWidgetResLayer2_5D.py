@@ -15,16 +15,13 @@ import discretize
 from SimPEG import maps, utils
 
 from pymatsolver import Pardiso
-#from SimPEG import Mesh, Maps, SolverLU, Utils
 from SimPEG.utils import ExtractCoreMesh
-#from SimPEG.Utils import ExtractCoreMesh
-#from SimPEG.EM.Static import DC
 from SimPEG.electromagnetics.static import resistivity as DC
 
 
 from ipywidgets import FloatSlider, FloatText, ToggleButtons
 
-from DCLayers import widgetify
+from .DCLayers import widgetify
 
 # Mesh, sigmaMap can be globals global
 npad = 15

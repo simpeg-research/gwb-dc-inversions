@@ -388,7 +388,7 @@ def plot_layer_potentials(survey_type, rho1, rho2, h, A, B, M, N, imgplt="Model"
             np.c_[x[match_point], 0.0, 0.0],
         )/Vplt[match_point, 0]
 
-        norm = SymLogNorm(linthresh=15)#vmin=-1.0, vmax=1.0)
+        norm = SymLogNorm(linthresh=10.0, linscale=0.2)
 
         cb = ax[1].pcolormesh(xplt, zplt, Vplt * fudgeFactor, cmap="viridis",
                 norm=norm)
