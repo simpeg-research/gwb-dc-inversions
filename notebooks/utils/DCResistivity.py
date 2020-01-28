@@ -2,13 +2,15 @@ import numpy as np
 from pymatsolver import Pardiso
 from SimPEG import maps, data
 from SimPEG.electromagnetics.static import resistivity as DC
+import pandas as pd
 
-from SimPEG import (maps, data, data_misfit, regularization,
-    optimization, inverse_problem, inversion, directives, utils
+from SimPEG import (data_misfit, regularization,
+    optimization, inverse_problem, inversion, directives, utils,
+    Data
     )
 
 from SimPEG.electromagnetics.static.utils import (
-    genTopography, gen_DCIPsurvey
+    genTopography, gen_DCIPsurvey, StaticUtils
 )
 import matplotlib.pyplot as plt
 import matplotlib
@@ -19,6 +21,8 @@ matplotlib.rcParams['font.size'] = 14
 from ipywidgets import GridspecLayout, widgets
 import os
 from scipy.interpolate import interp1d
+
+from discretize import TensorMesh
 
 class DCRSimulationApp(object):
     """docstring for DCRSimulationApp"""
@@ -152,7 +156,13 @@ class DCRSimulationApp(object):
             survey_type=survey_type,
             xmax=line_length
         )
-        self.plot_src_rx(i_src, i_rx)
+        self._isrc_slider.max = len(self.survey.srcList)-1
+        src = self.survey.srcList[i_src]
+        self._irx_slider.max = src.rxList[0].nD-1
+        if(i_rx > self._irx_slider.max):
+            pass
+        else:
+            self.plot_src_rx(i_src, i_rx)
 
     def get_mesh(self, add_topography=False, seed=1):
 
@@ -199,7 +209,7 @@ class DCRSimulationApp(object):
         rho0,
         rho1,
         xc,
-        yc,
+        ytop,
         dx,
         dy,
         std,
@@ -213,6 +223,8 @@ class DCRSimulationApp(object):
     ):
 
         self.std = std
+
+        yc = ytop-dy/2.0
 
         if simulate:
             fig, ax = plt.subplots(1, 1, figsize = (10, 7))
@@ -271,7 +283,11 @@ class DCRSimulationApp(object):
         line_length=widgets.FloatText(value=200, description='line length')
         n_spacing = widgets.IntSlider(min=5, max=13, step=1, value=8, description='n-spacing')
         i_src = widgets.IntSlider(min=0, max=10, step=1, value=0, description='src #')
-        i_rx = widgets.IntSlider(min=0, max=10, step=1, value=0, description='rx #')
+        i_rx = widgets.IntSlider(min=0, max=n_spacing.value-1, step=1, value=0, description='rx #')
+
+        self._isrc_slider = i_src
+        self._irx_slider = i_rx
+
         out = widgets.interactive_output(
             self.plot_survey,
             {
@@ -305,8 +321,8 @@ class DCRSimulationApp(object):
         xc = widgets.FloatSlider(
             description="xc", continuous_update=False, min=0, max=200, step=1, value=100
         )
-        yc = widgets.FloatSlider(
-            description="zc", continuous_update=False, min=-50, max=0, step=1, value=-10
+        ytop = widgets.FloatSlider(
+            description="ztop", continuous_update=False, min=-50, max=0, step=1, value=-5
         )
         rho0 = widgets.FloatSlider(
             description="$\\rho_0$",
@@ -376,7 +392,7 @@ class DCRSimulationApp(object):
                 "dx": dx,
                 "dy": dy,
                 "xc": xc,
-                "yc": yc,
+                "ytop": ytop,
                 "rho0": rho0,
                 "rho1": rho1,
                 "show_grid": show_grid,
@@ -395,7 +411,7 @@ class DCRSimulationApp(object):
         grid[0, 0] = dx
         grid[1, 0] = dy
         grid[2, 0] = xc
-        grid[3, 0] = yc
+        grid[3, 0] = ytop
         grid[4, 0] = rho0
         grid[5, 0] = rho1
         grid[6, 0] = std
@@ -438,7 +454,7 @@ class DCRSimulationApp(object):
                 survey=self.survey
             )
         problem.pair(self.survey)
-        data = problem.makeSyntheticData(m, standard_deviation=self.std / 100.)
+        data = problem.make_synthetic_data(m, standard_deviation=self.std / 100.0, add_noise=True)
         self.survey.std = abs(data.dobs) * self.std / 100.
         self.survey.dobs = data.dobs
 
@@ -873,3 +889,257 @@ class DCRInversionApp(object):
             show_grid=show_grid,
             show_core=show_core
         )
+
+class DC1D3LayerApp(object):
+
+    def read_ves(self, fname, load):
+        if load:
+            try:
+                df = pd.read_csv(fname)
+                ab_2 = df['AB/2 (m)']
+                mn_2 = df['MN/2 (m)']
+                n_sounding = ab_2.size
+                # We generate tx and rx lists:
+                srclist = []
+                for ii in range(n_sounding):
+                    a_loc = ab_2[ii]
+                    b_loc = -ab_2[ii]
+                    m_loc = mn_2[ii]
+                    n_loc = -mn_2[ii]
+                    rx = DC.Rx.Dipole(np.r_[m_loc, 0, 0], np.r_[n_loc, 0, 0])
+                    locA = np.r_[a_loc, 0, 0]
+                    locB = np.r_[b_loc, 0, 0]
+                    src = DC.Src.Dipole([rx], locA, locB)
+                    srclist.append(src)
+                self.survey = DC.Survey(srclist)
+                self.data = Data(survey=self.survey, dobs=df['App. Res. (Ohm m)'].values)
+            except:
+                print("Reading input failed")
+
+    def generate_resistivity_model(self, rho_1, rho_2, rho_3, t_1, t_2):
+        hz = np.r_[t_1, t_2]
+        rho = np.r_[rho_1, rho_2, rho_3]
+        return hz, rho
+
+    def plot_resistivity(self, hz, rho, ax=None, **kwargs):
+        mesh_1d = TensorMesh([np.r_[hz, 100]])
+        StaticUtils.plot_layer(rho, mesh_1d, ax=ax, **kwargs)
+
+    def simulate(self, hz, rho):
+        wires = maps.Wires(('rho', rho.size), ('t', rho.size-1))
+        mapping_rho = maps.ExpMap(nP=rho.size) * wires.rho
+        mapping_t = maps.ExpMap(nP=rho.size-1) * wires.t
+        # mapping_t = wires.t
+        simulation = DC.DCSimulation_1D(
+            rhoMap=mapping_rho,
+            thicknessesMap=mapping_t,
+            survey=self.data.survey,
+            data_type='apparent_resistivity'
+        )
+        m = np.log(np.r_[rho, hz])
+        data_tmp = simulation.makeSyntheticData(m)
+        ab = simulation.electrode_separations['AB']
+        return ab, data_tmp
+
+    def interact_load_obs(self):
+        obs_name = widgets.Text(
+            value='./assets/ves-obs-3.csv',
+            placeholder='Type something',
+            description='filename:',
+            disabled=False
+        )
+        load = widgets.Checkbox(
+            value=True, description="load", disabled=False
+        )
+        widgets.interact(self.read_ves, fname=obs_name, load=load)
+
+    def plot_model_and_data(self, rho_1, rho_2, rho_3, t_1, t_2):
+        hz, rho = self.generate_resistivity_model(rho_1, rho_2, rho_3, t_1, t_2)
+        ab, data_tmp = self.simulate(hz, rho)
+
+        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+        self.plot_resistivity(hz, rho, ax=axs[0])
+        axs[1].loglog(ab/2., data_tmp.dobs, '-')
+        axs[1].loglog(ab/2., self.data.dobs, 'kx')
+        axs[1].set_xlabel("AB/2")
+        axs[1].set_ylabel("App. resistivity (ohm-m)")
+        axs[1].grid(which='both')
+        plt.tight_layout()
+
+        self.man_mod = (rho, hz)
+        self.man_data = data_tmp
+        self.ab = ab
+
+    def interact_1d_layer(self):
+        rho_1 = widgets.FloatLogSlider(
+                    value=np.median(self.data.dobs), min=1, max=4.5, step=0.01,
+                    continuous_update=False, description='$\\rho_1$'
+                    )
+        rho_2 = widgets.FloatLogSlider(
+                    value=np.median(self.data.dobs), min=1, max=4.5, step=0.01,
+                    continuous_update=False, description='$\\rho_2$'
+                    )
+        rho_3 = widgets.FloatLogSlider(
+                    value=np.median(self.data.dobs), min=1, max=4.5, step=0.01,
+                    continuous_update=False, description='$\\rho_3$'
+                    )
+        t_1 = widgets.FloatLogSlider(
+                    value=10, min=0, max=3.5, step=0.01,
+                    continuous_update=False, description='$h_1$'
+                    )
+        t_2 = widgets.FloatLogSlider(
+                    value=10, min=0, max=3.5, step=0.01,
+                    continuous_update=False, description='$h_2$'
+                    )
+        widgets.interact(
+            self.plot_model_and_data,
+            rho_1=rho_1,
+            rho_2=rho_2,
+            rho_3=rho_3,
+            t_1=t_1,
+            t_2=t_2
+            )
+
+    def run_inversion(
+            self,
+            run,
+            percentage,
+            floor,
+            rho0,
+            thickness0,
+            n_layer,
+            max_iter,
+            ):
+        if not run:
+            return
+
+        alpha_s=1.0
+        alpha_x=1.0
+        beta0_ratio=1
+
+        std = percentage*0.01
+        m0 = np.r_[
+            np.log(np.ones(n_layer)*rho0),
+            np.log(np.ones(n_layer-1) * thickness0)
+            ]
+        wires = maps.Wires(('rho', n_layer), ('t', n_layer-1))
+        mapping_rho = maps.ExpMap(nP=n_layer) * wires.rho
+        mapping_t = maps.ExpMap(nP=n_layer-1) * wires.t
+        simulation = DC.DCSimulation_1D(
+            rhoMap=mapping_rho,
+            thicknessesMap=mapping_t,
+            survey=self.data.survey,
+            data_type='apparent_resistivity'
+        )
+        dmis = data_misfit.L2DataMisfit(simulation=simulation, data=self.data)
+        uncert = abs(self.data.dobs) * std + floor
+        dmis.W = 1./uncert
+
+        mesh_rho = TensorMesh([n_layer])
+        reg_rho = regularization.Simple(
+            mesh_rho, alpha_s=alpha_s, alpha_x=alpha_x,
+            mapping=wires.rho
+        )
+        mesh_t = TensorMesh([n_layer-1])
+        reg_t = regularization.Simple(
+            mesh_t, alpha_s=alpha_s, alpha_x=alpha_x,
+            mapping=wires.t
+        )
+        reg = reg_rho + reg_t
+
+        opt = optimization.InexactGaussNewton(
+            maxIter=max_iter, maxIterCG=20, print_type='ubc'
+        )
+
+        invProb = inverse_problem.BaseInvProblem(dmis, reg, opt)
+        target = directives.TargetMisfit()
+
+        beta = directives.BetaSchedule(coolingFactor=2., coolingRate=1.)
+        betaest = directives.BetaEstimate_ByEig(beta0_ratio=beta0_ratio)
+        save = directives.SaveOutputDictEveryIteration()
+        inv = inversion.BaseInversion(invProb, directiveList=[beta, target, save, betaest])
+
+        opt.remember('xc')
+        # rho_s = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+        self.rho_map = mapping_rho
+        self.t_map = mapping_t
+        self.mopt = inv.run(m0)
+        self.outDict = save.outDict
+
+    def plot_inversion_results(self, iteration):
+        rho_man, t_man = self.man_mod
+        ab = self.ab
+
+        mopt = self.outDict[iteration]['m']
+        rho_est = self.rho_map * mopt
+        t_est = self.t_map * mopt
+
+        data_tmp = self.man_data
+
+        fig, axs = plt.subplots(1,2,figsize=(10, 5))
+
+        self.plot_resistivity(t_man, rho_man, ax=axs[0],
+            color='k', alpha=0.5, linestyle='--', label='Manual Model')
+        self.plot_resistivity(t_est, rho_est, ax=axs[0],
+            color='r', label='Inverted Model')
+        axs[0].legend()
+
+        axs[1].loglog(ab/2., self.outDict[iteration]['dpred'], '-')
+        axs[1].loglog(ab/2., self.data.dobs, 'kx')
+        axs[1].loglog(ab/2., data_tmp.dobs, 'k--', alpha=0.5)
+        axs[1].set_xlabel("AB/2")
+        axs[1].set_ylabel("App. resistivity (ohm-m)")
+        axs[1].grid(which='both')
+        plt.tight_layout()
+
+    def interact_run_inversion(self):
+        run = widgets.Checkbox(
+            value=True, description="run", disabled=False
+        )
+
+        percentage = widgets.FloatText(
+            value=1., continuous_update=False,
+            description='std (%)'
+            )
+        floor = widgets.FloatText(
+            value=10.0, continuous_update=False,
+            description='noise floor'
+            )
+        rho0 = widgets.FloatText(
+            value=np.median(self.data.dobs),
+            continuous_update=False,
+            description='$\\rho_0$'
+            )
+        thickness0 = widgets.FloatText(
+            value=30.,
+            continuous_update=False,
+            description="$h_0$"
+            )
+        n_layer = widgets.IntText(
+            value=3, continuous_update=False,
+            description="$n_{layers}$"
+        )
+        max_iteration = widgets.IntText(
+            value=12, continuous_update=False,
+            description='Max iterations'
+        )
+
+        widgets.interact(
+            self.run_inversion,
+            run=run,
+            percentage=percentage,
+            floor=floor,
+            rho0=rho0,
+            thickness0=thickness0,
+            n_layer=n_layer,
+            max_iter=max_iteration
+            )
+
+    def interact_plot_inversion_results(self):
+        n_iteration = len(self.outDict)
+        iteration = widgets.IntSlider(
+            min=1, max=n_iteration, step=1, value=1, continuous_update=False
+            )
+        widgets.interact(self.plot_inversion_results,
+            iteration=iteration
+            )
