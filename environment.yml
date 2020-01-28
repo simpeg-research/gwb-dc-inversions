@@ -17,5 +17,5 @@ dependencies:
   - pip:
     - pymatsolver
     - discretize
-    - git+https://github.com/simpeg/simpeg.git@simulation-jk
+    - git+https://github.com/simpeg/simpeg.git@simulation
     - empymod
