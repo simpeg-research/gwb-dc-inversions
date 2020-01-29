@@ -64,13 +64,13 @@ def model_soundings(h0, h1, rho0, rho1, rho2):
     srcList_s = []
     AB2 = np.arange(4, 89, 3)+0.5
     for i, a in enumerate(AB2):
-        a_loc = a
-        b_loc = -a
-        m_loc_wen = a - (a*2)//3
+        a_loc = -a
+        b_loc = a
+        m_loc_wen = -a + (a*2)//3
         n_loc_wen = -m_loc_wen
 
-        m_loc_sch = 1.5
-        n_loc_sch = -1.5
+        m_loc_sch = -1.5
+        n_loc_sch = 1.5
         rx_w = DC.Rx.Dipole(np.r_[m_loc_wen, 0, 0], np.r_[n_loc_wen, 0, 0])
         rx_s = DC.Rx.Dipole(np.r_[m_loc_sch, 0, 0], np.r_[n_loc_sch, 0, 0])
 
@@ -80,7 +80,6 @@ def model_soundings(h0, h1, rho0, rho1, rho2):
         srcList_w.append(src)
         src = DC.Src.Dipole([rx_s], locA, locB)
         srcList_s.append(src)
-
 
     m = np.r_[rho, hz]
 
@@ -190,14 +189,14 @@ def PLOT(
     survey_type = survey
     survey = 'Dipole-Dipole'
 
-    A = AB2
-    B = -AB2
+    A = -AB2
+    B = AB2
     if survey_type == 'Wenner':
-        M = AB2 - (AB2*2)//3
+        M = -AB2 + (AB2*2)//3
         N = -M
     else:
-        M = 1.5
-        N = -1.5
+        M = -1.5
+        N = 1.5
 
     # Calculate resistivity profile
     ab2s = np.arange(4, 89, 3)+0.5
@@ -207,9 +206,15 @@ def PLOT(
         mesh.gridCC, np.r_[0., -h0, -(h0+h1)], np.r_[rho0, rho1, rho2]
     )
     if Field != 'Model':
-        src, total_field = model_fields(
-            A, B, h0, h1, rho0, rho1, rho2
-        )
+        if Type != 'Primary':
+            src, total_field = model_fields(
+                A, B, h0, h1, rho0, rho1, rho2
+            )
+        if Type != 'Total':
+            _, primary_field = model_fields(
+                A, B, h0, h1, rho0, rho0, rho0
+            )
+
 
     fig, ax = plt.subplots(2, 1, figsize=(9 * 1.5, 9 * 1.8))
     fig.subplots_adjust(right=0.8, wspace=0.05)
@@ -220,13 +225,17 @@ def PLOT(
     else:
         rhoa = data_s.dobs[i_a]
 
+
     ax[0].plot(ab2s, data_w.dobs, label='Wenner')
     ax[0].plot(ab2s, data_s.dobs, label='Schlumberger')
     ax[0].plot([AB2], [rhoa], marker='*', markersize=labelsize)
-    if rho0==rho1 and rho1==rho2:
-        ax[0].set_xlim([0.9*rho1, 1.1*rho1])
+    minrho = min(rho0, rho1, rho2)
+    maxrho = max(rho0, rho1, rho2)
+    print(minrho, maxrho)
+    if minrho>0.975*maxrho:
+        ax[0].set_ylim([0.975*rho1, 1.025*rho1])
 
-    xytext = (AB2, 1.01*rhoa)
+    xytext = (AB2+1, rhoa)
     ax[0].annotate(r"$\rho_a$ = {:.2f}".format(rhoa), xy=xytext, fontsize=labelsize)
 
     ax[0].set_xscale('log')
@@ -266,7 +275,12 @@ def PLOT(
                 "norm": matplotlib.colors.SymLogNorm(linthresh=linthresh, linscale=0.2),
                 "cmap": "viridis",
             }
-        u = total_field["phi"]
+        if Type == 'Total':
+            u = total_field["phi"]
+        if Type == 'Primary':
+            u = primary_field['phi']
+        elif Type == 'Secondary':
+            u = total_field["phi"] - primary_field['phi']
 
     elif Field == "E":
 
@@ -282,7 +296,16 @@ def PLOT(
             pcolorOpts = {"norm": matplotlib.colors.LogNorm(), "cmap": "viridis"}
         formatter = "%.1e"
 
-        u = total_field["e"]
+        if Type == "Total":
+            u = total_field["e"]
+
+        elif Type == "Primary":
+            u = primary_field["e"]
+
+        elif Type == "Secondary":
+            uTotal = total_field["e"]
+            uPrim = primary_field["e"]
+            u = uTotal - uPrim
 
     elif Field == "J":
 
@@ -298,7 +321,16 @@ def PLOT(
             pcolorOpts = {"norm": matplotlib.colors.LogNorm(), "cmap": "viridis"}
         formatter = "%.1e"
 
-        u = total_field["j"]
+        if Type == "Total":
+            u = total_field["j"]
+
+        elif Type == "Primary":
+            u = primary_field["j"]
+
+        elif Type == "Secondary":
+            uTotal = total_field["j"]
+            uPrim = primary_field["j"]
+            u = uTotal - uPrim
 
     elif Field == "Charge":
 
@@ -318,16 +350,16 @@ def PLOT(
             }
         formatter = "%.1e"
 
-        if Type == 'Total':
+        if Type == "Total":
             u = total_field["q"]
-        else:
-            _, primary_field = model_fields(
-                A, B, h0, h1, rho0, rho0, rho0
-            )
-            if Type == 'Primary':
-                u = primary_field['q']
-            else:
-                u = total_field['q']-primary_field['q']
+
+        elif Type == "Primary":
+            u = primary_field["q"]
+
+        elif Type == "Secondary":
+            uTotal = total_field["q"]
+            uPrim = primary_field["q"]
+            u = uTotal - uPrim
 
     if Scale == "Log":
         eps = 1e-16
@@ -346,50 +378,19 @@ def PLOT(
     ax[1].set_xlabel("x (m)", fontsize=labelsize)
     ax[1].set_ylabel("z (m)", fontsize=labelsize)
 
-    if survey == "Dipole-Dipole":
-        ax[1].plot(A, 1.0, marker="v", color="red", markersize=labelsize)
-        ax[1].plot(B, 1.0, marker="v", color="blue", markersize=labelsize)
-        ax[1].plot(M, 1.0, marker="^", color="yellow", markersize=labelsize)
-        ax[1].plot(N, 1.0, marker="^", color="green", markersize=labelsize)
+    ax[1].plot(A, 1.0, marker="v", color="red", markersize=labelsize)
+    ax[1].plot(B, 1.0, marker="v", color="blue", markersize=labelsize)
+    ax[1].plot(M, 1.0, marker="^", color="yellow", markersize=labelsize)
+    ax[1].plot(N, 1.0, marker="^", color="green", markersize=labelsize)
 
-        xytextA1 = (A - 0.5, 2.5)
-        xytextB1 = (B - 0.5, 2.5)
-        xytextM1 = (M - 0.5, 2.5)
-        xytextN1 = (N - 0.5, 2.5)
-        ax[1].annotate("A", xy=xytextA1, xytext=xytextA1, fontsize=labelsize)
-        ax[1].annotate("B", xy=xytextB1, xytext=xytextB1, fontsize=labelsize)
-        ax[1].annotate("M", xy=xytextM1, xytext=xytextM1, fontsize=labelsize)
-        ax[1].annotate("N", xy=xytextN1, xytext=xytextN1, fontsize=labelsize)
-    elif survey == "Pole-Dipole":
-        ax[1].plot(A, 1.0, marker="v", color="red", markersize=labelsize)
-        ax[1].plot(M, 1.0, marker="^", color="yellow", markersize=labelsize)
-        ax[1].plot(N, 1.0, marker="^", color="green", markersize=labelsize)
-
-        xytextA1 = (A - 0.5, 2.5)
-        xytextM1 = (M - 0.5, 2.5)
-        xytextN1 = (N - 0.5, 2.5)
-        ax[1].annotate("A", xy=xytextA1, xytext=xytextA1, fontsize=labelsize)
-        ax[1].annotate("M", xy=xytextM1, xytext=xytextM1, fontsize=labelsize)
-        ax[1].annotate("N", xy=xytextN1, xytext=xytextN1, fontsize=labelsize)
-    elif survey == "Dipole-Pole":
-        ax[1].plot(A, 1.0, marker="v", color="red", markersize=labelsize)
-        ax[1].plot(B, 1.0, marker="v", color="blue", markersize=labelsize)
-        ax[1].plot(M, 1.0, marker="^", color="yellow", markersize=labelsize)
-
-        xytextA1 = (A - 0.5, 2.5)
-        xytextB1 = (B - 0.5, 2.5)
-        xytextM1 = (M - 0.5, 2.5)
-        ax[1].annotate("A", xy=xytextA1, xytext=xytextA1, fontsize=labelsize)
-        ax[1].annotate("B", xy=xytextB1, xytext=xytextB1, fontsize=labelsize)
-        ax[1].annotate("M", xy=xytextM1, xytext=xytextM1, fontsize=labelsize)
-    elif survey == "Pole-Pole":
-        ax[1].plot(A, 1.0, marker="v", color="red", markersize=labelsize)
-        ax[1].plot(M, 1.0, marker="^", color="yellow", markersize=labelsize)
-
-        xytextA1 = (A - 0.5, 2.5)
-        xytextM1 = (M - 0.5, 2.5)
-        ax[1].annotate("A", xy=xytextA1, xytext=xytextA1, fontsize=labelsize)
-        ax[1].annotate("M", xy=xytextM1, xytext=xytextM1, fontsize=labelsize)
+    xytextA1 = (A - 0.5, 2.5)
+    xytextB1 = (B - 0.5, 2.5)
+    xytextM1 = (M - 0.5, 2.5)
+    xytextN1 = (N - 0.5, 2.5)
+    ax[1].annotate("A", xy=xytextA1, xytext=xytextA1, fontsize=labelsize)
+    ax[1].annotate("B", xy=xytextB1, xytext=xytextB1, fontsize=labelsize)
+    ax[1].annotate("M", xy=xytextM1, xytext=xytextM1, fontsize=labelsize)
+    ax[1].annotate("N", xy=xytextN1, xytext=xytextN1, fontsize=labelsize)
 
     ax[1].tick_params(axis="both", which="major", labelsize=ticksize)
     cbar_ax = fig.add_axes([0.8, 0.05, 0.08, 0.5])
