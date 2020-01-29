@@ -489,11 +489,10 @@ class DCRInversionApp(object):
 
     def set_mesh(self):
 
-        if self.topo is None:
-            sort_ind = np.argsort(self.IO.electrode_locations[:,0])
-            self.topo = self.IO.electrode_locations[sort_ind,:]
-        tmp_x = np.r_[-1e10, self.topo[:,0], 1e10]
-        tmp_z = np.r_[self.topo[0,1], self.topo[:,1], self.topo[-1,1]]
+        sort_ind = np.argsort(self.IO.electrode_locations[:,0])
+        topo = self.IO.electrode_locations[sort_ind,:]
+        tmp_x = np.r_[-1e10, topo[:,0], 1e10]
+        tmp_z = np.r_[topo[0,1], topo[:,1], topo[-1,1]]
         self.topo = np.c_[tmp_x, tmp_z]
         self.mesh, self.actind = self.IO.set_mesh(topo=self.topo, method='linear')
 
@@ -515,7 +514,7 @@ class DCRInversionApp(object):
                 print ("   # of active cells: {0}".format(self.actind.sum()))
             except:
                 print (">> Reading input file is failed!")
-                # print (">> {} does not exist!".format(fname))
+                print (">> {} does not exist!".format(fname))
 
     def get_problem(self):
         actmap = maps.InjectActiveCells(
