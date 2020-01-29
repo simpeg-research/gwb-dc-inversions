@@ -490,7 +490,8 @@ class DCRInversionApp(object):
     def set_mesh(self):
 
         if self.topo is None:
-            self.topo = self.IO.electrode_locations
+            sort_ind = np.argsort(self.IO.electrode_locations[:,0])
+            self.topo = self.IO.electrode_locations[sort_ind,:]
         tmp_x = np.r_[-1e10, self.topo[:,0], 1e10]
         tmp_z = np.r_[self.topo[0,1], self.topo[:,1], self.topo[-1,1]]
         self.topo = np.c_[tmp_x, tmp_z]
