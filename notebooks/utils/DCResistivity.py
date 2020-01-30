@@ -490,19 +490,29 @@ class DCRInversionApp(object):
     def set_mesh(self):
 
         sort_ind = np.argsort(self.IO.electrode_locations[:,0])
-        topo = self.IO.electrode_locations[sort_ind,:]
-        tmp_x = np.r_[-1e10, topo[:,0], 1e10]
-        tmp_z = np.r_[topo[0,1], topo[:,1], topo[-1,1]]
-        self.topo = np.c_[tmp_x, tmp_z]
-        self.mesh, self.actind = self.IO.set_mesh(topo=self.topo, method='linear')
+        if self.topo is None:
+            topo_tmp = self.IO.electrode_locations[sort_ind,:]
+        else:
+            topo_tmp = self.topo.copy()
+        tmp_x = np.r_[-1e10, topo_tmp[:,0], 1e10]
+        tmp_z = np.r_[topo_tmp[0,1], topo_tmp[:,1], topo_tmp[-1,1]]
+        topo = np.c_[tmp_x, tmp_z]
+        self.mesh, self.actind = self.IO.set_mesh(topo=topo, method='linear')
 
-    def load_obs(self, fname, load, input_type):
+    def load_obs(self, fname, topo_name, load, input_type):
         if load:
             try:
                 if input_type == 'csv':
                     self.survey = self.IO.read_dc_data_csv(fname)
                 elif input_type == 'ubc_dc2d':
-                    self.survey = self.IO.read_ubc_dc2d_obs_file(fname, 'general')
+                    if topo_name == 'None':
+                        toponame = None
+                    else:
+                        toponame = topo_name
+                    self.survey = self.IO.read_ubc_dc2d_obs_file(
+                        fname, 'simple', toponame=toponame
+                    )
+
                 print (">> {} is loaded".format(fname))
                 print (">> survey type: {}".format(self.IO.survey_type))
                 print ("   # of data: {0}".format(self.survey.nD))
@@ -627,9 +637,18 @@ class DCRInversionApp(object):
             # value='./ubc_dc_data/obs_dc.dat',
             value='./dc.csv',
             placeholder='Type something',
-            description='filename:',
+            description='obsfile:',
             disabled=False
         )
+
+        topo_name = widgets.Text(
+            # value='./ubc_dc_data/obs_dc.dat',
+            value='None',
+            placeholder='Type something',
+            description='topofile:',
+            disabled=False
+        )
+
         load = widgets.Checkbox(
             value=True, description="load", disabled=False
         )
@@ -638,12 +657,17 @@ class DCRInversionApp(object):
             value="csv",
             description="input type"
         )
-        widgets.interact(self.load_obs, fname=obs_name, load=load, input_type=input_type)
 
-    def plot_obs_data(self, data_type, plot_type):
+
+        widgets.interact(
+            self.load_obs, fname=obs_name, topo_name=topo_name, load=load, input_type=input_type
+        )
+
+    def plot_obs_data(self, data_type, plot_type, aspect_ratio):
         fig, ax = plt.subplots(1,1, figsize=(10, 5))
         if plot_type == "pseudo-section":
             self.IO.plotPseudoSection(aspect_ratio=1, cmap='jet', data_type=data_type, ax=ax)
+            ax.set_aspect(aspect_ratio)
         elif plot_type == "histogram":
             if data_type == "apparent_resistivity":
                 out = ax.hist(np.log10(self.IO.apparent_resistivity), edgecolor='k')
@@ -770,10 +794,13 @@ class DCRInversionApp(object):
             value="pseudo-section",
             description="plot type"
         )
+        aspect_ratio = widgets.FloatText(value=1)
+
         widgets.interact(
             self.plot_obs_data,
             data_type=data_type,
             plot_type=plot_type,
+            aspect_ratio=aspect_ratio
         )
 
     def interact_set_uncertainty(self):
