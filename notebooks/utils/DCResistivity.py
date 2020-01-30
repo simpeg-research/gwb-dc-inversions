@@ -487,7 +487,7 @@ class DCRInversionApp(object):
         super(DCRInversionApp, self).__init__()
         self.IO = DC.IO()
 
-    def set_mesh(self):
+    def set_mesh(self, dx=None, dz=None, corezlength=None, i_src=None):
 
         sort_ind = np.argsort(self.IO.electrode_locations[:,0])
         if self.topo is None:
@@ -497,7 +497,49 @@ class DCRInversionApp(object):
         tmp_x = np.r_[-1e10, topo_tmp[:,0], 1e10]
         tmp_z = np.r_[topo_tmp[0,1], topo_tmp[:,1], topo_tmp[-1,1]]
         topo = np.c_[tmp_x, tmp_z]
-        self.mesh, self.actind = self.IO.set_mesh(topo=topo, method='linear')
+
+        if dx is 'None':
+            dx = None
+
+        if dz is 'None':
+            dz = None
+
+        if corezlength is 'None':
+            corezlength = None
+
+        self.mesh, self.actind = self.IO.set_mesh(
+            topo=topo,
+            method='linear',
+            dx=dx,
+            dy=dz,
+            corezlength=corezlength
+        )
+
+        if dx is not None:
+            fig, ax = plt.subplots(1,1, figsize=(10, 5))
+            self.mesh.plotImage(
+                self.actind, grid=True, ax=ax,
+                gridOpts={'color':'white', 'alpha':0.5}
+            )
+
+            ax.plot(self.IO.electrode_locations[:,0], self.IO.electrode_locations[:,1], 'k.')
+            src = self.survey.srcList[i_src]
+            rx = src.rxList[0]
+            m, n = rx.locs[0], rx.locs[1]
+            ax.plot(src.loc[0][0], src.loc[0][1], 'ro')
+            ax.plot(src.loc[1][0], src.loc[1][1], 'bo')
+            ax.plot(m[:,0],m[:,1],'yo', ms=8)
+            ax.plot(n[:,0],n[:,1],'go', ms=4)
+
+            ax.set_aspect(1)
+            ax.set_xlabel("x (m")
+            ax.set_ylabel("z (m")
+            ax.set_ylim(self.mesh.vectorNy.min(), self.mesh.vectorNy.max() + 10)
+
+            # print (">> 2D tensor mesh is set.")
+            # print ("   # of cells: {0}".format(self.mesh.nC))
+            # print ("   # of active cells: {0}".format(self.actind.sum()))
+
 
     def load_obs(self, fname, topo_name, load, input_type):
         if load:
@@ -513,15 +555,14 @@ class DCRInversionApp(object):
                         fname, 'simple', toponame=toponame
                     )
 
+                self.set_mesh()
                 print (">> {} is loaded".format(fname))
                 print (">> survey type: {}".format(self.IO.survey_type))
                 print ("   # of data: {0}".format(self.survey.nD))
                 rho_0 = self.get_initial_resistivity()
                 print ((">> suggested initial resistivity: %1.f ohm-m")%(rho_0))
-                self.set_mesh()
-                print (">> 2D tensor mesh is set.")
-                print ("   # of cells: {0}".format(self.mesh.nC))
-                print ("   # of active cells: {0}".format(self.actind.sum()))
+                print ((">> minimum electrode spacing / 4 is : %.1f m") % (self.IO.dx))
+                print ((">> estimated core depth is : %.1f m") % (self.IO.corezlength))
             except:
                 print (">> Reading input file is failed!")
                 print (">> {} does not exist!".format(fname))
@@ -632,6 +673,20 @@ class DCRInversionApp(object):
         else:
             pass
 
+    def interact_set_mesh(self):
+        dx = widgets.FloatText(value=self.IO.dx)
+        dz = widgets.FloatText(value=self.IO.dz)
+        corezlength = widgets.FloatText(value=self.IO.corezlength)
+        i_src = widgets.IntSlider(value=0, min=0, max=self.survey.nSrc-1, step=1)
+
+        widgets.interact(
+            self.set_mesh,
+                dx=dx,
+                dz=dz,
+                corezlength=corezlength,
+                i_src=i_src
+        )
+
     def interact_load_obs(self):
         obs_name = widgets.Text(
             # value='./ubc_dc_data/obs_dc.dat',
@@ -709,7 +764,7 @@ class DCRInversionApp(object):
             ax.set_xscale(scale)
             ax.set_yscale(scale)
 
-    def plot_data_misfit(self, iteration):
+    def plot_data_misfit(self, iteration, aspect_ratio=1):
         dobs = self.survey.dobs
         appres = dobs/self.IO.G
         vmin, vmax = appres.min(), appres.max()
@@ -725,6 +780,7 @@ class DCRInversionApp(object):
         titles = ["Observed", "Predicted", "Normalized misfit"]
         for i_ax, ax in enumerate(axs):
             ax.set_title(titles[i_ax])
+            ax.set_aspect(aspect_ratio)
 
     def plot_model(self, iteration, vmin=None, vmax=None, show_core=True, show_grid=False):
         clim = (vmin, vmax)
@@ -744,7 +800,7 @@ class DCRInversionApp(object):
         ticks = np.linspace(vmin, vmax, 3)
         cb = plt.colorbar(out[0], orientation='horizontal', fraction=0.03, ticks=ticks, ax=ax)
         cb.set_ticklabels([("%.1f")%(10**tick)for tick in ticks])
-        ax.plot(self.IO.electrode_locations[:,0], self.IO.electrode_locations[:,1], 'wo', markeredgecolor='k')
+        # ax.plot(self.IO.electrode_locations[:,0], self.IO.electrode_locations[:,1], 'wo', markeredgecolor='k')
         ax.set_xlabel("x (m)")
         ax.set_ylabel("z (m)")
         ax.set_aspect(1)
@@ -773,13 +829,14 @@ class DCRInversionApp(object):
         rho_max=1000,
         show_grid=False,
         show_core=True,
+        aspect_ratio=1,
     ):
         if plot_type == "misfit_curve":
             self.plot_misfit_curve(iteration, curve_type=curve_type, scale=scale)
         elif plot_type == "model":
             self.plot_model(iteration, vmin=rho_min, vmax=rho_max, show_core=show_core, show_grid=show_grid)
         elif plot_type == "data_misfit":
-            self.plot_data_misfit(iteration)
+            self.plot_data_misfit(iteration, aspect_ratio)
         else:
             raise NotImplementedError()
 
@@ -905,6 +962,10 @@ class DCRInversionApp(object):
             value=True, description="show core?", disabled=False
         )
 
+        aspect_ratio=widgets.FloatText(
+            value=1, continuous_update=False,
+        )
+
         widgets.interact(
             self.plot_inversion_results,
             iteration=iteration,
@@ -914,7 +975,8 @@ class DCRInversionApp(object):
             rho_min=rho_min,
             rho_max=rho_max,
             show_grid=show_grid,
-            show_core=show_core
+            show_core=show_core,
+            aspect_ratio=aspect_ratio
         )
 
 class DC1D3LayerApp(object):
@@ -1169,4 +1231,4 @@ class DC1D3LayerApp(object):
             )
         widgets.interact(self.plot_inversion_results,
             iteration=iteration
-            )
+        )
