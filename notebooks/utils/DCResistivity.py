@@ -566,6 +566,7 @@ class DCRInversionApp(object):
             except:
                 print (">> Reading input file is failed!")
                 print (">> {} does not exist!".format(fname))
+                print (">> or the input file format is wrong")
 
     def get_problem(self):
         actmap = maps.InjectActiveCells(
@@ -871,7 +872,7 @@ class DCRInversionApp(object):
 
     def interact_run_inversion(self):
         run = widgets.Checkbox(
-            value=True, description="run", disabled=False
+            value=False, description="run", disabled=False
         )
 
         rho_initial = np.ceil(self.get_initial_resistivity()                )
@@ -927,57 +928,60 @@ class DCRInversionApp(object):
         )
 
     def interact_plot_inversion_results(self):
-        iteration = widgets.IntSlider(
-            min=1, max=len(self.m), step=1, value=1, continuous_update=False
-        )
-        curve_type = widgets.ToggleButtons(
-            options=["misfit", "tikhonov"],
-            value="misfit",
-            description="curve type"
-        )
-        scale=widgets.ToggleButtons(
-            options=["linear", "log"],
-            value="linear",
-            description="scale"
-        )
-        plot_type = widgets.ToggleButtons(
-            options=["misfit_curve", "model", "data_misfit"],
-            value="misfit_curve",
-            description="plot type"
-        )
-        rho = 1./np.exp(self.m[-1])
-        rho_min=widgets.FloatText(
-            value=np.ceil(rho.min()), continuous_update=False,
-            description="$\\rho_{min}$"
-        )
-        rho_max=widgets.FloatText(
-            value=np.ceil(rho.max()), continuous_update=False,
-            description="$\\rho_{max}$"
-        )
+        try:
+            iteration = widgets.IntSlider(
+                min=1, max=len(self.m), step=1, value=1, continuous_update=False
+            )
+            curve_type = widgets.ToggleButtons(
+                options=["misfit", "tikhonov"],
+                value="misfit",
+                description="curve type"
+            )
+            scale=widgets.ToggleButtons(
+                options=["linear", "log"],
+                value="linear",
+                description="scale"
+            )
+            plot_type = widgets.ToggleButtons(
+                options=["misfit_curve", "model", "data_misfit"],
+                value="misfit_curve",
+                description="plot type"
+            )
+            rho = 1./np.exp(self.m[-1])
+            rho_min=widgets.FloatText(
+                value=np.ceil(rho.min()), continuous_update=False,
+                description="$\\rho_{min}$"
+            )
+            rho_max=widgets.FloatText(
+                value=np.ceil(rho.max()), continuous_update=False,
+                description="$\\rho_{max}$"
+            )
 
-        show_grid = widgets.Checkbox(
-            value=False, description="show grid?", disabled=False
-        )
-        show_core = widgets.Checkbox(
-            value=True, description="show core?", disabled=False
-        )
+            show_grid = widgets.Checkbox(
+                value=False, description="show grid?", disabled=False
+            )
+            show_core = widgets.Checkbox(
+                value=True, description="show core?", disabled=False
+            )
 
-        aspect_ratio=widgets.FloatText(
-            value=1, continuous_update=False,
-        )
+            aspect_ratio=widgets.FloatText(
+                value=1, continuous_update=False,
+            )
 
-        widgets.interact(
-            self.plot_inversion_results,
-            iteration=iteration,
-            curve_type=curve_type,
-            scale=scale,
-            plot_type=plot_type,
-            rho_min=rho_min,
-            rho_max=rho_max,
-            show_grid=show_grid,
-            show_core=show_core,
-            aspect_ratio=aspect_ratio
-        )
+            widgets.interact(
+                self.plot_inversion_results,
+                iteration=iteration,
+                curve_type=curve_type,
+                scale=scale,
+                plot_type=plot_type,
+                rho_min=rho_min,
+                rho_max=rho_max,
+                show_grid=show_grid,
+                show_core=show_core,
+                aspect_ratio=aspect_ratio
+            )
+        except:
+            print (">> no inversion results yet")
 
 class DC1D3LayerApp(object):
 
