@@ -82,8 +82,8 @@ def model_fields(survey_type, a_spacing, array_center, xc, zc, r, rhoHalf, rhoTa
         N = array_center + 0.5*a_spacing
         B = array_center + 1.5*a_spacing
     elif survey_type == 'Dipole-Dipole':
-        B = array_center - 1.5*a_spacing
-        A = array_center - 0.5*a_spacing
+        A = array_center - 1.5*a_spacing
+        B = array_center - 0.5*a_spacing
         M = array_center + 0.5*a_spacing
         N = array_center + 1.5*a_spacing
 
@@ -264,10 +264,14 @@ def PLOT(
         N = array_center + 0.5*a_spacing
         B = array_center + 1.5*a_spacing
     elif survey_type == 'Dipole-Dipole':
-        B = array_center - 1.5*a_spacing
-        A = array_center - 0.5*a_spacing
+        A = array_center - 1.5*a_spacing
+        B = array_center - 0.5*a_spacing
         M = array_center + 0.5*a_spacing
         N = array_center + 1.5*a_spacing
+
+    if np.abs(zc)-2<r:
+        r = np.abs(zc)-2
+        print(f'set r = {r}')
 
     mtrue = np.ones(mesh.nC)*rhohalf
     grid_r = np.sqrt((xc-mesh.gridCC[:, 0])**2 + (zc-mesh.gridCC[:, 1])**2)
@@ -289,8 +293,8 @@ def PLOT(
             N_i = x + 0.5*a_spacing
             B_i = x + 1.5*a_spacing
         elif survey_type == 'Dipole-Dipole':
-            B_i = x - 1.5*a_spacing
-            A_i = x - 0.5*a_spacing
+            A_i = x - 1.5*a_spacing
+            B_i = x - 0.5*a_spacing
             M_i = x + 0.5*a_spacing
             N_i = x + 1.5*a_spacing
 
@@ -458,7 +462,7 @@ def PLOT(
         view=view,
         streamOpts=streamOpts,
         pcolorOpts=pcolorOpts,
-    )  # gridOpts={'color':'k', 'alpha':0.5}
+    )
     if rhoTarget != rhohalf:
         from matplotlib.patches import Circle
         circle = Circle((xc, zc), r, fill=False, color='k', linestyle='--')
@@ -467,66 +471,26 @@ def PLOT(
     ax[1].set_xlabel("x (m)", fontsize=labelsize)
     ax[1].set_ylabel("z (m)", fontsize=labelsize)
 
-    if survey == "Dipole-Dipole":
-        ax[1].plot(A, 1.0, marker="v", color="red", markersize=labelsize)
-        ax[1].plot(B, 1.0, marker="v", color="blue", markersize=labelsize)
-        ax[1].plot(M, 1.0, marker="^", color="yellow", markersize=labelsize)
-        ax[1].plot(N, 1.0, marker="^", color="green", markersize=labelsize)
+    ax[1].plot(A, 1.0, marker="v", color="red", markersize=labelsize)
+    ax[1].plot(B, 1.0, marker="v", color="blue", markersize=labelsize)
+    ax[1].plot(M, 1.0, marker="^", color="yellow", markersize=labelsize)
+    ax[1].plot(N, 1.0, marker="^", color="green", markersize=labelsize)
 
-        xytextA1 = (A - 0.5, 2.5)
-        xytextB1 = (B - 0.5, 2.5)
-        xytextM1 = (M - 0.5, 2.5)
-        xytextN1 = (N - 0.5, 2.5)
-        ax[1].annotate("A", xy=xytextA1, xytext=xytextA1, fontsize=labelsize)
-        ax[1].annotate("B", xy=xytextB1, xytext=xytextB1, fontsize=labelsize)
-        ax[1].annotate("M", xy=xytextM1, xytext=xytextM1, fontsize=labelsize)
-        ax[1].annotate("N", xy=xytextN1, xytext=xytextN1, fontsize=labelsize)
-    elif survey == "Pole-Dipole":
-        ax[1].plot(A, 1.0, marker="v", color="red", markersize=labelsize)
-        ax[1].plot(M, 1.0, marker="^", color="yellow", markersize=labelsize)
-        ax[1].plot(N, 1.0, marker="^", color="green", markersize=labelsize)
-
-        xytextA1 = (A - 0.5, 2.5)
-        xytextM1 = (M - 0.5, 2.5)
-        xytextN1 = (N - 0.5, 2.5)
-        ax[1].annotate("A", xy=xytextA1, xytext=xytextA1, fontsize=labelsize)
-        ax[1].annotate("M", xy=xytextM1, xytext=xytextM1, fontsize=labelsize)
-        ax[1].annotate("N", xy=xytextN1, xytext=xytextN1, fontsize=labelsize)
-    elif survey == "Dipole-Pole":
-        ax[1].plot(A, 1.0, marker="v", color="red", markersize=labelsize)
-        ax[1].plot(B, 1.0, marker="v", color="blue", markersize=labelsize)
-        ax[1].plot(M, 1.0, marker="^", color="yellow", markersize=labelsize)
-
-        xytextA1 = (A - 0.5, 2.5)
-        xytextB1 = (B - 0.5, 2.5)
-        xytextM1 = (M - 0.5, 2.5)
-        ax[1].annotate("A", xy=xytextA1, xytext=xytextA1, fontsize=labelsize)
-        ax[1].annotate("B", xy=xytextB1, xytext=xytextB1, fontsize=labelsize)
-        ax[1].annotate("M", xy=xytextM1, xytext=xytextM1, fontsize=labelsize)
-    elif survey == "Pole-Pole":
-        ax[1].plot(A, 1.0, marker="v", color="red", markersize=labelsize)
-        ax[1].plot(M, 1.0, marker="^", color="yellow", markersize=labelsize)
-
-        xytextA1 = (A - 0.5, 2.5)
-        xytextM1 = (M - 0.5, 2.5)
-        ax[1].annotate("A", xy=xytextA1, xytext=xytextA1, fontsize=labelsize)
-        ax[1].annotate("M", xy=xytextM1, xytext=xytextM1, fontsize=labelsize)
+    xytextA1 = (A - 0.5, 2.5)
+    xytextB1 = (B - 0.5, 2.5)
+    xytextM1 = (M - 0.5, 2.5)
+    xytextN1 = (N - 0.5, 2.5)
+    ax[1].annotate("A", xy=xytextA1, xytext=xytextA1, fontsize=labelsize)
+    ax[1].annotate("B", xy=xytextB1, xytext=xytextB1, fontsize=labelsize)
+    ax[1].annotate("M", xy=xytextM1, xytext=xytextM1, fontsize=labelsize)
+    ax[1].annotate("N", xy=xytextN1, xytext=xytextN1, fontsize=labelsize)
 
     ax[1].tick_params(axis="both", which="major", labelsize=ticksize)
     cbar_ax = fig.add_axes([0.8, 0.05, 0.08, 0.5])
     cbar_ax.axis("off")
     vmin, vmax = dat[0].get_clim()
     if Scale == "Log":
-
-        if (Field == "E") or (Field == "J"):
-            cb = plt.colorbar(
-                dat[0],
-                ax=cbar_ax,
-                format=formatter,
-                ticks=np.logspace(np.log10(vmin), np.log10(vmax), 5),
-            )
-
-        elif Field == "Model":
+        if (Field == "E") or (Field == "J") or (Field == 'Model'):
             cb = plt.colorbar(
                 dat[0],
                 ax=cbar_ax,
@@ -552,6 +516,7 @@ def PLOT(
         )
 
     cb.ax.tick_params(labelsize=ticksize)
+    cb.minorticks_off()
     cb.set_label(label, fontsize=labelsize)
     ax[1].set_xlim([xmin, xmax])
     ax[1].set_ylim([ymin, ymax])
@@ -587,7 +552,7 @@ def ResCylLayer_app():
             min=-30.0, max=30.0, step=1.0, value=0.0, continuous_update=False
         ),
         zc=FloatSlider(
-            min=-30.0, max=-15.0, step=0.5, value=-15.0, continuous_update=False
+            min=-30.0, max=-3.0, step=0.5, value=-10, continuous_update=False
         ),
         r=FloatSlider(min=1.0, max=10.0, step=0.5, value=8.0, continuous_update=False),
         rhohalf=FloatText(
