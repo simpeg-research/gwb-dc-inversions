@@ -21,8 +21,42 @@ matplotlib.rcParams['font.size'] = 14
 from ipywidgets import GridspecLayout, widgets
 import os
 from scipy.interpolate import interp1d
+from scipy.spatial import Delaunay
 
 from discretize import TensorMesh
+
+
+def in_hull(p, hull):
+    """
+    Test if points in `p` are in `hull`
+
+    `p` should be a `NxK` coordinates of `N` points in `K` dimensions
+    `hull` is either a scipy.spatial.Delaunay object or the `MxK` array of the
+    coordinates of `M` points in `K`dimensions for which Delaunay triangulation
+    will be computed
+    """
+    if not isinstance(hull, Delaunay):
+        hull = Delaunay(hull)
+
+    return hull.find_simplex(p) >= 0
+
+
+def get_contour_verts(cn):
+    contours = []
+    # for each contour line
+    for cc in cn.collections:
+        paths = []
+        # for each separate section of the contour line
+        for pp in cc.get_paths():
+            xy = []
+            # for each segment of that section
+            for vv in pp.iter_segments():
+                xy.append(vv[0])
+            paths.append(np.vstack(xy))
+        contours.append(paths)
+
+    return contours
+
 
 class DCRSimulationApp(object):
     """docstring for DCRSimulationApp"""
@@ -164,27 +198,32 @@ class DCRSimulationApp(object):
         else:
             self.plot_src_rx(i_src, i_rx)
 
-    def get_mesh(self, add_topography=False, seed=1):
+    def get_mesh(self, add_topography=False, seed=1, ncell_per_dipole=4):
 
         self.get_survey(
             a=self.a,
             n_spacing=self.n_spacing,
             survey_type=self.survey_type,
-            xmax=self.line_length
+            xmax=self.line_length,
         )
 
-        self.mesh, self.actind = self.IO.set_mesh()
+        self.mesh, self.actind = self.IO.set_mesh(ncell_per_dipole=ncell_per_dipole)
 
         if add_topography:
             topo, mesh1D = genTopography(self.mesh, -10, 0, its=100, seed=seed)
-            self.actind = utils.surface2ind_topo(self.mesh, np.c_[mesh1D.vectorCCx, topo])
+            self.actind = utils.surface2ind_topo(
+                self.mesh, np.c_[mesh1D.vectorCCx, topo]
+            )
 
         self.survey.drapeTopo(self.mesh, self.actind, option="top")
         self.survey.getABMN_locations()
         self.survey = self.IO.from_ambn_locations_to_survey(
-            self.survey.a_locations, self.survey.b_locations,
-            self.survey.m_locations, self.survey.n_locations,
-            self.survey_type, data_dc_type='volt'
+            self.survey.a_locations,
+            self.survey.b_locations,
+            self.survey.m_locations,
+            self.survey.n_locations,
+            self.survey_type,
+            data_dc_type="volt",
         )
 
 
@@ -209,7 +248,7 @@ class DCRSimulationApp(object):
         rho0,
         rho1,
         xc,
-        ytop,
+        yc,
         dx,
         dy,
         std,
@@ -220,31 +259,35 @@ class DCRSimulationApp(object):
         update=False,
         write_obs_file=False,
         obs_name=None,
+        ncell_per_dipole=4,
+        aspect_ratio=1,
     ):
 
         self.std = std
 
-        yc = ytop-dy/2.0
-
         if simulate:
-            fig, ax = plt.subplots(1, 1, figsize = (10, 7))
-            self.get_mesh(add_topography=add_topography)
+            fig, ax = plt.subplots(1, 1, figsize=(10, 7))
+            self.get_mesh(
+                add_topography=add_topography, ncell_per_dipole=ncell_per_dipole
+            )
             self._rho = np.ones(self.mesh.nC) * rho0
             index = self.get_block_index(xc=xc, yc=yc, dx=dx, dy=dy)
             self._rho[index] = rho1
             self._rho[~self.actind] = np.nan
 
             self.plot_data(ax=ax)
-            ax.set_aspect(1)
+            ax.set_aspect(aspect_ratio)
             if write_obs_file:
                 self.write_to_csv(obs_name)
-                print ('{0} is written'.format(obs_name))
+                print("{0} is written".format(obs_name))
         else:
             if write_obs_file:
-                print ('>> write_obs_file is only activated when simiulate is checked!')
+                print(">> write_obs_file is only activated when simiulate is checked!")
             else:
-                fig, ax = plt.subplots(1, 1, figsize = (10, 7))
-                self.get_mesh(add_topography=add_topography)
+                fig, ax = plt.subplots(1, 1, figsize=(10, 7))
+                self.get_mesh(
+                    add_topography=add_topography, ncell_per_dipole=ncell_per_dipole
+                )
                 self._rho = np.ones(self.mesh.nC) * rho0
                 index = self.get_block_index(xc=xc, yc=yc, dx=dx, dy=dy)
                 self._rho[index] = rho1
@@ -254,23 +297,37 @@ class DCRSimulationApp(object):
                 out = self.mesh.plotImage(
                     np.log10(self._rho),
                     ax=ax,
-                    pcolorOpts={"cmap":"jet"},
+                    pcolorOpts={"cmap": "jet_r"},
                     grid=show_grid,
                     gridOpts={"color": "white", "alpha": 0.5},
-                    clim=(vmin, vmax)
+                    clim=(vmin, vmax),
                 )
-                cb = plt.colorbar(out[0], ax=ax, fraction=0.02, orientation='horizontal', ticks=np.linspace(vmin, vmax, 3))
-                cb.set_ticklabels([("%.1f")%(10**value) for value in np.linspace(vmin, vmax, 3)])
-                ax.plot(self.IO.electrode_locations[:, 0], self.IO.electrode_locations[:, 1], "wo", markeredgecolor='k')
-                ax.set_aspect(1)
+                cb = plt.colorbar(
+                    out[0],
+                    ax=ax,
+                    fraction=0.02,
+                    orientation="horizontal",
+                    ticks=np.linspace(vmin, vmax, 3),
+                )
+                cb.set_ticklabels(
+                    [("%.1f") % (10 ** value) for value in np.linspace(vmin, vmax, 3)]
+                )
+                ax.plot(
+                    self.IO.electrode_locations[:, 0],
+                    self.IO.electrode_locations[:, 1],
+                    "wo",
+                    markeredgecolor="k",
+                )
+                ax.set_aspect(aspect_ratio)
                 ax.set_xlabel("x (m)")
                 ax.set_ylabel("z (m)")
                 cb.set_label("Resistivity ($\Omega$m)")
                 if show_core:
-                    ax.set_xlim(self.IO.xyzlim[0,:])
-                    ax.set_ylim(self.IO.xyzlim[1,:])
+                    ax.set_xlim(self.IO.xyzlim[0, :])
+                    ax.set_ylim(self.IO.xyzlim[1, :])
                 else:
                     ax.set_ylim(self.mesh.vectorNy.min(), 5)
+
 
     def interact_plot_survey(self):
         a=widgets.FloatText(value=10, description='spacing')
@@ -311,7 +368,7 @@ class DCRSimulationApp(object):
         return grid
 
     def interact_plot_model(self):
-        std=widgets.FloatText(value=0., description='noise (%)')
+        std = widgets.FloatText(value=0.0, description="noise (%)")
         dx = widgets.FloatSlider(
             description="dx", continuous_update=False, min=0, max=500, step=10, value=20
         )
@@ -321,8 +378,8 @@ class DCRSimulationApp(object):
         xc = widgets.FloatSlider(
             description="xc", continuous_update=False, min=0, max=200, step=1, value=100
         )
-        ytop = widgets.FloatSlider(
-            description="ztop", continuous_update=False, min=-50, max=0, step=1, value=-5
+        yc = widgets.FloatSlider(
+            description="zc", continuous_update=False, min=-50, max=0, step=1, value=-10
         )
         rho0 = widgets.FloatSlider(
             description="$\\rho_0$",
@@ -340,7 +397,13 @@ class DCRSimulationApp(object):
             step=50,
             value=100,
         )
-
+        ncell_per_dipole = widgets.IntSlider(
+            description="n$_{cell}$/dipole",
+            value=4,
+            continuous_update=False,
+            min=1,
+            max=10,
+        )
         add_block = widgets.RadioButtons(
             options=["active", "inactive"],
             value="active",
@@ -353,7 +416,6 @@ class DCRSimulationApp(object):
             description="model type",
             disabled=False,
         )
-
         show_grid = widgets.Checkbox(
             value=False, description="show grid?", disabled=False
         )
@@ -366,33 +428,41 @@ class DCRSimulationApp(object):
         simulate = widgets.Checkbox(
             value=False, description="simulate?", disabled=False
         )
+
+        # def run_it(_):
+        #     if update.value:
+        #         update.value = False
+
         update = widgets.ToggleButton(
             value=False,
-            description='Update',
+            description="Update",
             disabled=False,
-            button_style='', # 'success', 'info', 'warning', 'danger' or ''
-            tooltip='Description',
-            icon='check'
+            button_style="",  # 'success', 'info', 'warning', 'danger' or ''
+            tooltip="Description",
+            icon="check",
         )
+
+        # update.observe(run_it)
+
         obs_name = widgets.Text(
-            value='dc.csv',
-            placeholder='Type something',
-            description='filename:',
+            value="dc.csv",
+            placeholder="Type something",
+            description="obsname:",
             disabled=False,
-            continuous_update=False
+            continuous_update=False,
         )
 
         write_obs_file = widgets.Checkbox(
             value=False, description="write obs file", disabled=False
         )
-
+        aspect_ratio = widgets.FloatText(value=1, description="aspect_ ratio")
         out = widgets.interactive_output(
             self.plot_model,
             {
                 "dx": dx,
                 "dy": dy,
                 "xc": xc,
-                "ytop": ytop,
+                "yc": yc,
                 "rho0": rho0,
                 "rho1": rho1,
                 "show_grid": show_grid,
@@ -403,25 +473,29 @@ class DCRSimulationApp(object):
                 "std": std,
                 "obs_name": obs_name,
                 "write_obs_file": write_obs_file,
+                "ncell_per_dipole": ncell_per_dipole,
+                "aspect_ratio": aspect_ratio,
             },
         )
 
-        grid = GridspecLayout(8, 3, height='400px')
+        grid = GridspecLayout(9, 3, height="400px")
         grid[:5, 1:] = out
         grid[0, 0] = dx
         grid[1, 0] = dy
         grid[2, 0] = xc
-        grid[3, 0] = ytop
+        grid[3, 0] = yc
         grid[4, 0] = rho0
-        grid[5, 0] = rho1
-        grid[6, 0] = std
-        grid[7, 0] = obs_name
+        grid[5, 0] = ncell_per_dipole
+        grid[6, 0] = rho1
+        grid[7, 0] = std
+        grid[8, 0] = obs_name
         grid[5, 1] = show_grid
         grid[6, 1] = show_core
         grid[7, 1] = write_obs_file
         grid[5, 2] = simulate
         grid[6, 2] = add_topography
-        grid[7, 2] = update
+        grid[7, 2] = aspect_ratio
+        grid[8, 2] = update
 
         return grid
 
@@ -457,6 +531,7 @@ class DCRSimulationApp(object):
         data = problem.make_synthetic_data(m, standard_deviation=self.std / 100.0, add_noise=True)
         self.survey.std = abs(data.dobs) * self.std / 100.
         self.survey.dobs = data.dobs
+        self.problem = problem
 
         return data.dobs
 
@@ -482,10 +557,27 @@ class DCRInversionApp(object):
     m = None
     sigma_air = 1e-8
     topo = None
+    _Jmatrix = None
+    _JtJ = None
+    _doi_index = None
+    doi = False
+
 
     def __init__(self):
         super(DCRInversionApp, self).__init__()
         self.IO = DC.IO()
+
+    @property
+    def Jmatrix(self):
+        if self._Jmatrix is None:
+            self._Jmatrix = self.problem.getJ(self.m[-1])
+        return self._Jmatrix
+
+    @property
+    def JtJ(self):
+        if self._JtJ is None:
+            self._JtJ = np.sqrt((self.Jmatrix ** 2).sum(axis=0))
+        return self._JtJ
 
     def set_mesh(self, dx=None, dz=None, corezlength=None, i_src=None):
 
@@ -536,11 +628,6 @@ class DCRInversionApp(object):
             ax.set_ylabel("z (m")
             ax.set_ylim(self.mesh.vectorNy.min(), self.mesh.vectorNy.max() + 10)
 
-            # print (">> 2D tensor mesh is set.")
-            # print ("   # of cells: {0}".format(self.mesh.nC))
-            # print ("   # of active cells: {0}".format(self.actind.sum()))
-
-
     def load_obs(self, fname, topo_name, load, input_type):
         if load:
             try:
@@ -561,8 +648,15 @@ class DCRInversionApp(object):
                 print ("   # of data: {0}".format(self.survey.nD))
                 rho_0 = self.get_initial_resistivity()
                 print ((">> suggested initial resistivity: %1.f ohm-m")%(rho_0))
-                print ((">> minimum electrode spacing / 4 is : %.1f m") % (self.IO.dx))
+                print (">> 2D tensor mesh is set.")
+                print ("   # of cells: {0}".format(self.mesh.nC))
+                print ("   # of active cells: {0}".format(self.actind.sum()))
+                print(
+                    "   size of 2D cells (hx, hy) = (%1.f m, %1.f m)"
+                    % (self.mesh.hx.min(), self.mesh.hy.min())
+                )
                 print ((">> estimated core depth is : %.1f m") % (self.IO.corezlength))
+
             except:
                 print (">> Reading input file is failed!")
                 print (">> {} does not exist!".format(fname))
@@ -618,7 +712,7 @@ class DCRInversionApp(object):
     ):
         if run:
             maxIterCG=20
-            problem = self.get_problem()
+            self.problem = self.get_problem()
             m0 = np.ones(self.actind.sum()) * np.log(1./rho_0)
             if rho_ref is None:
                 rho_ref = rho_0
@@ -626,7 +720,7 @@ class DCRInversionApp(object):
 
             dc_data = data.Data(self.survey, dobs=self.survey.dobs)
             dmis = data_misfit.L2DataMisfit(
-                data=dc_data, simulation=problem
+                data=dc_data, simulation=self.problem
             )
             dmis.W = 1./self.uncertainty
             reg = regularization.Tikhonov(
@@ -660,17 +754,34 @@ class DCRInversionApp(object):
 
             minv = inv.run(m0)
 
-            self.phi_d = []
-            self.phi_m = []
-            self.m = []
-            self.dpred = []
+            # Store all inversion parameters
 
-            for key in save_outputs.outDict.keys():
-                self.phi_d.append(save_outputs.outDict[key]['phi_d'].copy()*2.)
-                self.phi_m.append(save_outputs.outDict[key]['phi_m'].copy()*2.)
-                self.m.append(save_outputs.outDict[key]['m'].copy())
-                self.dpred.append(save_outputs.outDict[key]['dpred'].copy())
+            if self.doi:
+                self.m_doi = minv.copy()
+            else:
+                self.alpha_s = alpha_s
+                self.alpha_x = alpha_x
+                self.alpha_z = alpha_z
+                self.rho_0 = rho_0
+                self.rho_ref = rho_ref
+                self.beta0_ratio = beta0_ratio
+                self.chifact = chifact
+                self.maxIter = maxIter
+                self.coolingFactor = coolingFactor
+                self.coolingRate = coolingRate
+
+                self.phi_d = []
+                self.phi_m = []
+                self.m = []
+                self.dpred = []
+
+                for key in save_outputs.outDict.keys():
+                    self.phi_d.append(save_outputs.outDict[key]["phi_d"].copy() * 2.0)
+                    self.phi_m.append(save_outputs.outDict[key]["phi_m"].copy() * 2.0)
+                    self.m.append(save_outputs.outDict[key]["m"].copy())
+                    self.dpred.append(save_outputs.outDict[key]["dpred"].copy())
             os.system("rm -f *.txt")
+
         else:
             pass
 
@@ -783,19 +894,19 @@ class DCRInversionApp(object):
             ax.set_title(titles[i_ax])
             ax.set_aspect(aspect_ratio)
 
-    def plot_model(self, iteration, vmin=None, vmax=None, show_core=True, show_grid=False):
+    def plot_model(self, iteration, vmin=None, vmax=None, show_core=True, show_grid=False, aspect_ratio=1):
         clim = (vmin, vmax)
         # inds_core, self. = Utils.ExtractCoreMesh(self.IO.xyzlim, self.mesh)
         fig, ax = plt.subplots(1,1, figsize=(10, 5))
-        prob = self.get_problem()
-        tmp = np.log10(1./(prob.sigmaMap*self.m[iteration-1]))
+
+        tmp = np.log10(1./(self.problem.sigmaMap*self.m[iteration-1]))
         tmp[~self.actind] = np.nan
         if clim is None:
             vmin, vmax = tmp[self.actind].min(), tmp[self.actind].max()
         else:
             vmin, vmax = np.log10(clim[0]), np.log10(clim[1])
         out = self.mesh.plotImage(
-            tmp, grid=show_grid, clim=(vmin, vmax), pcolorOpts={'cmap':'jet'}, ax=ax,
+            tmp, grid=show_grid, clim=(vmin, vmax), pcolorOpts={'cmap':'jet_r'}, ax=ax,
             gridOpts={"color": "white", "alpha": 0.5}
         )
         ticks = np.linspace(vmin, vmax, 3)
@@ -804,7 +915,7 @@ class DCRInversionApp(object):
         # ax.plot(self.IO.electrode_locations[:,0], self.IO.electrode_locations[:,1], 'wo', markeredgecolor='k')
         ax.set_xlabel("x (m)")
         ax.set_ylabel("z (m)")
-        ax.set_aspect(1)
+        ax.set_aspect(aspect_ratio)
         if show_core:
             ymin, ymax = self.IO.xyzlim[1,:]
             xmin, xmax = self.IO.xyzlim[0,:]
@@ -817,6 +928,55 @@ class DCRInversionApp(object):
             dy = (ymax-ymin)/10.
             ax.set_ylim(ymin, ymax+dy)
             ax.set_xlim(xmin, xmax+dy)
+
+        plt.tight_layout()
+
+    def plot_sensitivity(self, show_core, show_grid, scale, aspect_ratio):
+        # inds_core, self. = Utils.ExtractCoreMesh(self.IO.xyzlim, self.mesh)
+        fig, ax = plt.subplots(1, 1, figsize=(10, 5))
+        if scale == "log":
+            tmp = np.log10(self.JtJ)
+        elif scale == "linear":
+            tmp = self.JtJ
+        tmp[~self.actind] = np.nan
+        out = self.mesh.plotImage(
+            tmp,
+            grid=show_grid,
+            pcolorOpts={"cmap": "jet"},
+            ax=ax,
+            gridOpts={"color": "white", "alpha": 0.5},
+        )
+        vmin, vmax = out[0].get_clim()
+        ticks = np.linspace(vmin, vmax, 3)
+        cb = plt.colorbar(
+            out[0], orientation="horizontal", fraction=0.03, ticks=ticks, ax=ax
+        )
+        if scale == "log":
+            cb.set_ticklabels([("%.1e") % (10 ** tick) for tick in ticks])
+        elif scale == "linear":
+            cb.set_ticklabels([("%.1e") % (tick) for tick in ticks])
+
+        ax.plot(
+            self.IO.electrode_locations[:, 0],
+            self.IO.electrode_locations[:, 1],
+            "wo",
+            markeredgecolor="k",
+        )
+        ax.set_xlabel("x (m)")
+        ax.set_ylabel("z (m)")
+        ax.set_aspect(aspect_ratio)
+        if show_core:
+            ymin, ymax = self.IO.xyzlim[1, :]
+            xmin, xmax = self.IO.xyzlim[0, :]
+            dy = (ymax - ymin) / 10.0
+            ax.set_ylim(ymin, ymax + dy)
+            ax.set_xlim(xmin, xmax)
+        else:
+            ymin, ymax = self.mesh.vectorNy.min(), self.mesh.vectorNy.max()
+            xmin, xmax = self.mesh.vectorNx.min(), self.mesh.vectorNx.max()
+            dy = (ymax - ymin) / 10.0
+            ax.set_ylim(ymin, ymax + dy)
+            ax.set_xlim(xmin, xmax + dy)
 
         plt.tight_layout()
 
@@ -833,13 +993,376 @@ class DCRInversionApp(object):
         aspect_ratio=1,
     ):
         if plot_type == "misfit_curve":
-            self.plot_misfit_curve(iteration, curve_type=curve_type, scale=scale)
+            self.plot_misfit_curve(
+                iteration, curve_type=curve_type,
+                scale=scale
+            )
         elif plot_type == "model":
-            self.plot_model(iteration, vmin=rho_min, vmax=rho_max, show_core=show_core, show_grid=show_grid)
+            self.plot_model(
+                iteration,
+                vmin=rho_min,
+                vmax=rho_max,
+                show_core=show_core,
+                show_grid=show_grid,
+                aspect_ratio=aspect_ratio
+            )
         elif plot_type == "data_misfit":
-            self.plot_data_misfit(iteration, aspect_ratio)
+            self.plot_data_misfit(
+                iteration,
+                aspect_ratio=aspect_ratio
+            )
+        elif plot_type == "sensitivity":
+            self.plot_sensitivity(
+                scale=scale,
+                show_core=show_core,
+                show_grid=show_grid,
+                aspect_ratio=aspect_ratio,
+            )
         else:
             raise NotImplementedError()
+
+    def plot_model_doi(
+        self,
+        vmin=None,
+        vmax=None,
+        show_core=True,
+        show_grid=False,
+        scale="log",
+        aspect_ratio=1,
+    ):
+
+        m1 = self.m[-1]
+        m2 = self.m_doi
+        problem = self.get_problem()
+        if scale == "log":
+            rho1 = np.log10(1.0 / (problem.sigmaMap * self.m[-1]))
+            rho2 = np.log10(1.0 / (problem.sigmaMap * self.m_doi))
+        elif scale == "linear":
+            rho1 = 1.0 / (problem.sigmaMap * self.m[-1])
+            rho2 = 1.0 / (problem.sigmaMap * self.m_doi)
+
+        rho1[~self.actind] = np.nan
+        rho2[~self.actind] = np.nan
+
+        if scale == "log":
+            vmin, vmax = np.log10(vmin), np.log10(vmax)
+
+        fig, axs = plt.subplots(2, 1, figsize=(10, 5))
+        ax1 = axs[0]
+        ax2 = axs[1]
+
+        out = self.mesh.plotImage(
+            rho1,
+            grid=show_grid,
+            clim=(vmin, vmax),
+            pcolorOpts={"cmap": "jet_r"},
+            ax=ax1,
+            gridOpts={"color": "white", "alpha": 0.5},
+        )
+        self.mesh.plotImage(
+            rho2,
+            grid=show_grid,
+            clim=(vmin, vmax),
+            pcolorOpts={"cmap": "jet_r"},
+            ax=ax2,
+            gridOpts={"color": "white", "alpha": 0.5},
+        )
+        ticks = np.linspace(vmin, vmax, 3)
+
+        for ax in axs:
+
+            cb = plt.colorbar(
+                out[0], orientation="vertical", fraction=0.008, ticks=ticks, ax=ax
+            )
+            if scale == "log":
+                cb.set_ticklabels([("%.1f") % (10 ** tick) for tick in ticks])
+            elif scale == "linear":
+                cb.set_ticklabels([("%.1f") % (tick) for tick in ticks])
+
+            ax.plot(
+                self.IO.electrode_locations[:, 0],
+                self.IO.electrode_locations[:, 1],
+                "wo",
+                markeredgecolor="k",
+            )
+            ax.set_xlabel("x (m)")
+            ax.set_ylabel("z (m)")
+            ax.set_aspect(aspect_ratio)
+            if show_core:
+                ymin, ymax = self.IO.xyzlim[1, :]
+                xmin, xmax = self.IO.xyzlim[0, :]
+                dy = (ymax - ymin) / 10.0
+                ax.set_ylim(ymin, ymax + dy)
+                ax.set_xlim(xmin, xmax)
+            else:
+                ymin, ymax = self.mesh.vectorNy.min(), self.mesh.vectorNy.max()
+                xmin, xmax = self.mesh.vectorNx.min(), self.mesh.vectorNx.max()
+                dy = (ymax - ymin) / 10.0
+                ax.set_ylim(ymin, ymax + dy)
+                ax.set_xlim(xmin, xmax + dy)
+
+        plt.tight_layout()
+
+    def plot_doi_index(
+        self,
+        show_core=True,
+        show_grid=False,
+        vmin=0,
+        vmax=2,
+        level=0.3,
+        k=100,
+        power=2,
+        aspect_ratio=1,
+    ):
+
+        m1 = self.m[-1]
+        m2 = self.m_doi
+
+        mref_1 = np.log(1.0 / self.rho_ref)
+        mref_2 = np.log(1.0 / (self.rho_ref * self.factor))
+
+        def compute_doi_index(m1, m2, mref_1, mref_2):
+            doi_index = (m1 - m2) / (mref_1 - mref_2)
+            return doi_index
+
+        doi_index = compute_doi_index(m1, m2, mref_1, mref_2)
+        tmp = np.ones(self.mesh.nC) * np.nan
+        tmp[self.actind] = doi_index
+
+        fig, ax = plt.subplots(1, 1, figsize=(10, 5))
+
+        out = self.mesh.plotImage(
+            tmp,
+            grid=show_grid,
+            clim=(vmin, vmax),
+            pcolorOpts={"cmap": "jet_r"},
+            ax=ax,
+            gridOpts={"color": "white", "alpha": 0.5},
+        )
+        tmp_contour = np.ones(self.mesh.nC) * np.nan
+        tmp_contour[self.actind] = doi_index
+        tmp_contour = np.ma.masked_array(tmp_contour, ~self.actind)
+
+        cs = ax.contour(
+            self.mesh.vectorCCx,
+            self.mesh.vectorCCy,
+            tmp_contour.reshape(self.mesh.vnC, order="F").T,
+            levels=[level],
+            colors="k",
+        )
+        ax.clabel(cs, fmt="%.1f", colors="k", fontsize=12)  # contour line labels
+
+        contours = get_contour_verts(cs)
+        pts = np.vstack(contours[0])
+        self.doi_index = doi_index
+        self.doi_inds = ~in_hull(self.mesh.gridCC, pts)
+
+        ticks = np.linspace(vmin, vmax, 3)
+
+        cb = plt.colorbar(
+            out[0], orientation="vertical", fraction=0.008, ticks=ticks, ax=ax
+        )
+        cb.set_ticklabels([("%.1f") % (tick) for tick in ticks])
+
+        ax.plot(
+            self.IO.electrode_locations[:, 0],
+            self.IO.electrode_locations[:, 1],
+            "wo",
+            markeredgecolor="k",
+        )
+        ax.set_xlabel("x (m)")
+        ax.set_ylabel("z (m)")
+        ax.set_aspect(aspect_ratio)
+        if show_core:
+            ymin, ymax = self.IO.xyzlim[1, :]
+            xmin, xmax = self.IO.xyzlim[0, :]
+            dy = (ymax - ymin) / 10.0
+            ax.set_ylim(ymin, ymax + dy)
+            ax.set_xlim(xmin, xmax)
+        else:
+            ymin, ymax = self.mesh.vectorNy.min(), self.mesh.vectorNy.max()
+            xmin, xmax = self.mesh.vectorNx.min(), self.mesh.vectorNx.max()
+            dy = (ymax - ymin) / 10.0
+            ax.set_ylim(ymin, ymax + dy)
+            ax.set_xlim(xmin, xmax + dy)
+
+        plt.tight_layout()
+
+    def plot_model_with_doi(
+        self,
+        vmin=None,
+        vmax=None,
+        show_core=True,
+        show_grid=False,
+        scale="log",
+        aspect_ratio=1,
+    ):
+        problem = self.get_problem()
+        if scale == "log":
+            rho1 = np.log10(1.0 / (problem.sigmaMap * self.m[-1]))
+        elif scale == "linear":
+            rho1 = 1.0 / (problem.sigmaMap * self.m[-1])
+
+        rho1[~self.actind] = np.nan
+        rho1[self.doi_inds] = np.nan
+
+        if scale == "log":
+            vmin, vmax = np.log10(vmin), np.log10(vmax)
+
+        fig, ax = plt.subplots(1, 1, figsize=(10, 5))
+
+        out = self.mesh.plotImage(
+            rho1,
+            grid=show_grid,
+            clim=(vmin, vmax),
+            pcolorOpts={"cmap": "jet_r"},
+            ax=ax,
+            gridOpts={"color": "white", "alpha": 0.5},
+        )
+
+        ticks = np.linspace(vmin, vmax, 3)
+
+        cb = plt.colorbar(
+            out[0], orientation="vertical", fraction=0.008, ticks=ticks, ax=ax
+        )
+        if scale == "log":
+            cb.set_ticklabels([("%.1f") % (10 ** tick) for tick in ticks])
+        elif scale == "linear":
+            cb.set_ticklabels([("%.1f") % (tick) for tick in ticks])
+
+        ax.plot(
+            self.IO.electrode_locations[:, 0],
+            self.IO.electrode_locations[:, 1],
+            "wo",
+            markeredgecolor="k",
+        )
+        ax.set_xlabel("x (m)")
+        ax.set_ylabel("z (m)")
+        ax.set_aspect(aspect_ratio)
+        if show_core:
+            ymin, ymax = self.IO.xyzlim[1, :]
+            xmin, xmax = self.IO.xyzlim[0, :]
+            dy = (ymax - ymin) / 10.0
+            ax.set_ylim(ymin, ymax + dy)
+            ax.set_xlim(xmin, xmax)
+        else:
+            ymin, ymax = self.mesh.vectorNy.min(), self.mesh.vectorNy.max()
+            xmin, xmax = self.mesh.vectorNx.min(), self.mesh.vectorNx.max()
+            dy = (ymax - ymin) / 10.0
+            ax.set_ylim(ymin, ymax + dy)
+            ax.set_xlim(xmin, xmax + dy)
+
+        plt.tight_layout()
+
+    def plot_doi_results(
+        self,
+        plot_type="models",
+        rho_min=100,
+        rho_max=1000,
+        doi_level=0.3,
+        scale="log",
+        show_grid=False,
+        show_core=True,
+        aspect_ratio=1,
+    ):
+        if plot_type == "models":
+            self.plot_model_doi(
+                vmin=rho_min,
+                vmax=rho_max,
+                show_core=show_core,
+                show_grid=show_grid,
+                scale=scale,
+                aspect_ratio=aspect_ratio,
+            )
+        elif plot_type == "doi":
+            self.plot_doi_index(
+                show_core=show_core,
+                show_grid=show_grid,
+                vmin=0,
+                vmax=1,
+                level=doi_level,
+                aspect_ratio=aspect_ratio,
+            )
+        elif plot_type == "final":
+            self.plot_model_with_doi(
+                vmin=rho_min,
+                vmax=rho_max,
+                show_core=show_core,
+                show_grid=show_grid,
+                scale=scale,
+                aspect_ratio=aspect_ratio,
+            )
+        else:
+            raise NotImplementedError()
+
+    def run_doi(self, factor, run=False):
+        self.factor = factor
+        self.doi = True
+        if run:
+            self.run_inversion(
+                self.rho_0 * factor,
+                self.rho_ref * factor,
+                alpha_s=self.alpha_s,
+                alpha_x=self.alpha_x,
+                alpha_z=self.alpha_z,
+                maxIter=self.maxIter,
+                chifact=self.chifact,
+                beta0_ratio=self.beta0_ratio,
+                coolingFactor=self.coolingFactor,
+                coolingRate=self.coolingRate,
+                run=True,
+            )
+        self.doi = False
+
+    def interact_run_doi(self):
+
+        widgets.interact(self.run_doi, factor=widgets.FloatText(0.5))
+
+    def interact_plot_doi_results(self):
+        try:
+            plot_type = widgets.ToggleButtons(
+                options=["models", "doi", "final"], value="doi", description="plot type"
+            )
+            scale = widgets.ToggleButtons(
+                options=["log", "linear"], value="log", description="scale"
+            )
+
+            rho = 1.0 / np.exp(self.m[-1])
+            rho_min = widgets.FloatText(
+                value=np.ceil(rho.min()),
+                continuous_update=False,
+                description="$\\rho_{min}$",
+            )
+            rho_max = widgets.FloatText(
+                value=np.ceil(rho.max()),
+                continuous_update=False,
+                description="$\\rho_{max}$",
+            )
+
+            show_grid = widgets.Checkbox(
+                value=False, description="show grid?", disabled=False
+            )
+            show_core = widgets.Checkbox(
+                value=True, description="show core?", disabled=False
+            )
+
+            doi_level = widgets.FloatText(value=0.3)
+
+            aspect_ratio = widgets.FloatText(value=1)
+
+            widgets.interact(
+                self.plot_doi_results,
+                plot_type=plot_type,
+                rho_min=rho_min,
+                rho_max=rho_max,
+                doi_level=doi_level,
+                show_grid=show_grid,
+                show_core=show_core,
+                scale=scale,
+                aspect_ratio=aspect_ratio,
+            )
+        except:
+            print (">> an inversion for doi calculation is needed to be run")
 
     def interact_plot_obs_data(self):
         data_type = widgets.ToggleButtons(
@@ -876,7 +1399,7 @@ class DCRInversionApp(object):
         )
 
         rho_initial = np.ceil(self.get_initial_resistivity()                )
-        maxIter=widgets.IntText(value=30, continuous_update=False)
+        maxIter=widgets.IntText(value=10, continuous_update=False)
         rho_0=widgets.FloatText(
             value=rho_initial, continuous_update=False,
             description="$\\rho_0$"
@@ -897,7 +1420,7 @@ class DCRInversionApp(object):
             description='n_iter / beta'
         )
         alpha_s=widgets.FloatText(
-            value=1e-10, continuous_update=False,
+            value=0.1, continuous_update=False,
             description="$\\alpha_{s}$"
         )
         alpha_x=widgets.FloatText(
@@ -939,11 +1462,11 @@ class DCRInversionApp(object):
             )
             scale=widgets.ToggleButtons(
                 options=["linear", "log"],
-                value="linear",
+                value="log",
                 description="scale"
             )
             plot_type = widgets.ToggleButtons(
-                options=["misfit_curve", "model", "data_misfit"],
+                options=["misfit_curve", "model", "data_misfit", "sensitivity"],
                 value="misfit_curve",
                 description="plot type"
             )
