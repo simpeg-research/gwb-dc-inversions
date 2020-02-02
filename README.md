@@ -11,7 +11,7 @@ Examples of 1D and 2D inversions for Geoscience Without Border Projects at Myanm
 ### online
 You can run these notebooks online through mybinder by clicking on the badge below:
 
-[![Binder](https://mybinder.org/badge.svg)](https://mybinder.org/v2/gh/simpeg-research/gwb-dc-inversions/master?filepath=notebooks%2Findex.ipynb)
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/simpeg-research/gwb-dc-inversions/master?filepath=notebooks%2Findex.ipynb)
 
 ### locally
 To run the notebooks locally, you will need to have python installed,
@@ -32,11 +32,10 @@ Then `cd` into the `gwb-dc` directory:
 cd gwb-dc-inversions
 ```
 
-To setup your software environment, we recommend you use the provided conda environment
+To setup your software environment, please use conda forge and install SimPEG: 
 
 ```
-conda env create -f environment.yml
-conda activate gwb-dc
+conda install -c conda-forge/label/beta simpeg
 ```
 
 You can then launch Jupyter
