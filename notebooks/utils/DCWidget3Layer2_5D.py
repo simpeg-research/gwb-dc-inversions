@@ -225,10 +225,9 @@ def PLOT(
     else:
         rhoa = data_s.dobs[i_a]
 
-
-    ax[0].plot(ab2s, data_w.dobs, label='Wenner')
-    ax[0].plot(ab2s, data_s.dobs, label='Schlumberger')
-    ax[0].plot([AB2], [rhoa], marker='*', markersize=labelsize)
+    ax[0].plot(ab2s, data_w.dobs, 'r', lw=3, label='Wenner')
+    ax[0].plot(ab2s, data_s.dobs, 'b', lw=3, label='Schlumberger')
+    ax[0].plot([AB2], [rhoa], 'k', marker='*', markersize=labelsize)
     minrho = min(rho0, rho1, rho2)
     maxrho = max(rho0, rho1, rho2)
     print(minrho, maxrho)
@@ -243,6 +242,8 @@ def PLOT(
     ax[0].legend()
     ax[0].set_ylabel(r'$\rho_a$ ($\Omega$m)')
     ax[0].set_xlabel(r'$\frac{AB}{2}$ (m)')
+    matplotlib.rcParams['font.size'] = labelsize
+    ax[0].grid(True, which="both", ls="--", c='gray')
 
     if Field == "Model":
 
