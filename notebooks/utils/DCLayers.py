@@ -252,9 +252,9 @@ def plot_layer_potentials(survey_type, rho1, rho2, h, A, B, M, N, imgplt="Model"
     fontsize = 16.0
     ylim = np.r_[-1.0, 1.0] * rhomax / (5 * 2 * np.pi) * 1.5
 
-    fig, ax = plt.subplots(2, 1, figsize=(9, 7))
+    fig, ax = plt.subplots(2, 1, figsize=(9, 8))
 
-    fig.subplots_adjust(right=0.8)
+    fig.subplots_adjust(hspace=0.25)
     x = np.linspace(-40.0, 40.0, 200)
     z = np.linspace(x.min(), 0, 100)
 
@@ -529,7 +529,7 @@ def plot_layer_potentials(survey_type, rho1, rho2, h, A, B, M, N, imgplt="Model"
         ax[1].plot(N, 1.0, marker="^", color="green", markersize=markersize)
         ax[1].annotate("N", xy=xytextN1, xytext=xytextN1, fontsize=fontsize)
 
-    plt.tight_layout()
+    # plt.tight_layout()
     plt.show()
     return fig, ax
 
