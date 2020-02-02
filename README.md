@@ -1,4 +1,4 @@
-**[usage](#usage) | [running the notebooks](#running-the-notebooks) | [issues](#issues) | [citation](#citation) | [license](#license)**
+**[usage](#usage) | [running the notebooks](#running-the-notebooks) | [issues](#issues)**
 
 # gwb-dc-inversions
 Examples of 1D and 2D inversions for Geoscience Without Border Projects at Myanmar
