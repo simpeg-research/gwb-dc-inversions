@@ -590,13 +590,13 @@ class DCRInversionApp(object):
         tmp_z = np.r_[topo_tmp[0,1], topo_tmp[:,1], topo_tmp[-1,1]]
         topo = np.c_[tmp_x, tmp_z]
 
-        if dx is 'None':
+        if dx == 'None':
             dx = None
 
-        if dz is 'None':
+        if dz == 'None':
             dz = None
 
-        if corezlength is 'None':
+        if corezlength == 'None':
             corezlength = None
 
         self.mesh, self.actind = self.IO.set_mesh(
@@ -1559,7 +1559,7 @@ class DC1D3LayerApp(object):
 
     def interact_load_obs(self):
         obs_name = widgets.Text(
-            value='./assets/ves-obs-3.csv',
+            value='./assets/Mawlamyaing_data_locations_3.csv',
             placeholder='Type something',
             description='filename:',
             disabled=False
