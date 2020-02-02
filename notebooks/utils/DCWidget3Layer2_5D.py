@@ -230,7 +230,6 @@ def PLOT(
     ax[0].plot([AB2], [rhoa], 'k', marker='*', markersize=labelsize)
     minrho = min(rho0, rho1, rho2)
     maxrho = max(rho0, rho1, rho2)
-    print(minrho, maxrho)
     if minrho>0.975*maxrho:
         ax[0].set_ylim([0.975*rho1, 1.025*rho1])
 
