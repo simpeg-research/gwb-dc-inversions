@@ -859,6 +859,7 @@ def PLOT(
     # cb.ax.yaxis.set_major_locator(matplotlib.ticker.AutoLocator())
     # cb.update_ticks()
     cb.ax.tick_params(labelsize=ticksize)
+    cb.minorticks_off()
     cb.set_label(label, fontsize=labelsize)
     ax[1].set_xlim([xmin, xmax])
     ax[1].set_ylim([ymin, ymax])

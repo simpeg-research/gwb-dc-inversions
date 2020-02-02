@@ -437,6 +437,7 @@ def PLOT(
     # cb.update_ticks()
     cb.ax.tick_params(labelsize=ticksize)
     cb.set_label(label, fontsize=labelsize)
+    cb.minorticks_off()
     ax[1].set_xlim([xmin, xmax])
     ax[1].set_ylim([ymin, ymax])
     ax[1].set_aspect("equal")
