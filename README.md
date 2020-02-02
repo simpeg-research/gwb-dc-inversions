@@ -14,21 +14,33 @@ You can run these notebooks online through mybinder by clicking on the badge bel
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/simpeg-research/gwb-dc-inversions/master?filepath=notebooks%2Findex.ipynb)
 
 ### locally
+
+#### Step 1: Install Anaconda
 To run the notebooks locally, you will need to have python installed,
 preferably through [anaconda](https://www.anaconda.com/download/). Please download 
 Python 3.7 or greater. 
 
-Once you have downloaded and installed anaconda, you can then download this repository through: https://github.com/simpeg-research/gwb-dc-inversions/archive/master.zip, and the unzip the directory somewhere convienent, or if you are familiar with `git`, you can clone this repository; from a command line (if you are on windows, please use the anaconda terminal that came with the installation)
+
+#### Step 2: Download the apps
+Once you have downloaded and installed anaconda, you can then download this repository through: https://github.com/simpeg-research/gwb-dc-inversions/archive/master.zip, and the unzip the directory somewhere convienent (e.g. your desktop). 
+
+**Aside**
+
+If you are familiar with `git`, you can clone this repository; from a command line (if you are on windows, please use the anaconda terminal that came with the installation)
 run
 
 ```
 git clone https://github.com/simpeg-research/gwb-dc-inversions.git
 ```
 
-Then `cd` into the `gwb-dc` directory:
+#### Step 3: Install Dependencies
+
+Open the anaconda prompt (if on windows) or a terminal otherwise.
+
+Then `cd` into the `gwb-dc` directory. Note that you will need to replace `[path]` with the path to where you downloaded the apps to. You can find this by opening up a file-browser where you unzipped the directory and copying that path:
 
 ```
-cd gwb-dc-inversions
+cd [path]/gwb-dc-inversions
 ```
 
 To setup your software environment, please use conda forge and install SimPEG: 
@@ -36,6 +48,8 @@ To setup your software environment, please use conda forge and install SimPEG:
 ```
 conda install -c conda-forge/label/beta simpeg
 ```
+
+#### Step 4: Launch Jupyter
 
 You can then launch Jupyter
 
