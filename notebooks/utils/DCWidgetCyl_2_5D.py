@@ -330,7 +330,7 @@ def PLOT(
         VM = phiTotalSurface[MInd[0]]
         VN = phiTotalSurface[NInd[0]]
 
-    fig, ax = plt.subplots(2, 1, figsize=(9 * 1.5, 9 * 1.8), sharex=True)
+    fig, ax = plt.subplots(2, 1, figsize=(7.5, 9), sharex=True)
     fig.subplots_adjust(right=0.8, wspace=0.05, hspace=0.05)
 
     prof_min, prof_max = profile_rhoa.min(), 1.02*profile_rhoa.max()

@@ -216,8 +216,8 @@ def PLOT(
             )
 
 
-    fig, ax = plt.subplots(2, 1, figsize=(9 * 1.5, 9 * 1.8))
-    fig.subplots_adjust(right=0.8, wspace=0.05)
+    fig, ax = plt.subplots(2, 1, figsize=(11, 10))
+    fig.subplots_adjust(right=0.8, wspace=0.05, hspace=0.35)
 
     i_a = np.argmin(np.abs(ab2s-AB2))
     if survey_type == 'Wenner':
@@ -394,7 +394,7 @@ def PLOT(
     ax[1].annotate("N", xy=xytextN1, xytext=xytextN1, fontsize=labelsize)
 
     ax[1].tick_params(axis="both", which="major", labelsize=ticksize)
-    cbar_ax = fig.add_axes([0.8, 0.05, 0.08, 0.5])
+    cbar_ax = fig.add_axes([0.65, 0.05, 0.08, 0.5])
     cbar_ax.axis("off")
     vmin, vmax = dat[0].get_clim()
     if Scale == "Log":
