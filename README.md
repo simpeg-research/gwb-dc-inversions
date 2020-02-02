@@ -18,8 +18,7 @@ To run the notebooks locally, you will need to have python installed,
 preferably through [anaconda](https://www.anaconda.com/download/). Please download 
 Python 3.7 or greater. 
 
-Once you have downloaded and installed anaconda, you can then clone this repository. 
-From a command line (if you are on windows, please use the anaconda terminal that came with the installation)
+Once you have downloaded and installed anaconda, you can then download this repository through: https://github.com/simpeg-research/gwb-dc-inversions/archive/master.zip, and the unzip the directory somewhere convienent, or if you are familiar with `git`, you can clone this repository; from a command line (if you are on windows, please use the anaconda terminal that came with the installation)
 run
 
 ```
