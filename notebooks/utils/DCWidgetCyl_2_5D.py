@@ -353,14 +353,16 @@ def PLOT(
 
     rhoa = profile_rhoa[x_centers==array_center]
 
-    ax[0].plot(x_centers, profile_rhoa)
-    ax[0].plot([array_center], [rhoa], marker='*', markersize=labelsize)
+    ax[0].plot(x_centers, profile_rhoa, 'b', lw=3)
+    ax[0].plot([array_center], [rhoa], 'k', marker='*', markersize=labelsize)
     xytext = (array_center, rhoa*1.01)
     ax[0].annotate(r"$\rho_a$ = {:.2f}".format(rhoa[0]), xy=xytext, fontsize=labelsize)
     #ax[0].set_xlim([xmin, xmax])
     ax[0].set_ylim([rhoa_min, rhoa_max])
     ax[0].set_ylabel(r'$\rho_a$')
     #ax[0].set_yscale('log')
+    matplotlib.rcParams['font.size'] = labelsize
+    ax[0].grid(True, which="both", ls="--", c='gray')
 
     if Field == "Model":
 
