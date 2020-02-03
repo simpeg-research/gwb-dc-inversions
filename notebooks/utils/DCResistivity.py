@@ -7,7 +7,7 @@ import pandas as pd
 from SimPEG import (data_misfit, regularization,
     optimization, inverse_problem, inversion, directives, utils,
     Data
-    )
+)
 
 from SimPEG.electromagnetics.static.utils import (
     genTopography, gen_DCIPsurvey, StaticUtils
