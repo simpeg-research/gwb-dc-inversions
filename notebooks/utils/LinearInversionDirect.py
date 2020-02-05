@@ -198,14 +198,14 @@ class LinearInversionDirectApp(object):
         np.random.seed(1)
 
         if add_noise:
-            prob = self.get_simiulation()
+            prob = self.get_simulation()
             data = prob.dpred(m)
             noise = (
                 abs(data) * percentage * 0.01 * np.random.randn(self.N)
                 + np.random.randn(self.N) * floor
             )
         else:
-            prob = self.get_simiulation()
+            prob = self.get_simulation()
             data = prob.dpred(m)
             noise = np.zeros(self.N, float)
 
@@ -268,7 +268,7 @@ class LinearInversionDirectApp(object):
                 # ax.yaxis.set_minor_formatter(plt.NullFormatter())
         plt.tight_layout()
 
-    def get_simiulation(self):
+    def get_simulation(self):
         lin_simulation = simulation.LinearSimulation(
             self.mesh, G=self.G, model_map=maps.IdentityMap(self.mesh)
         )
@@ -287,7 +287,7 @@ class LinearInversionDirectApp(object):
         alpha_s=1.0,
         alpha_x=1.0,
     ):
-        simulation = self.get_simiulation()
+        simulation = self.get_simulation()
         dobs = self.data.copy()
         lin_data = Data(survey=simulation.survey, dobs=dobs)
 
