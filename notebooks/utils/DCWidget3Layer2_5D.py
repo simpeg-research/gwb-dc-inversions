@@ -452,27 +452,21 @@ def ThreeLayer_app():
             options=["Wenner", "Schlumberger"],
             value="Wenner",
         ),
-        AB2=FloatSlider(
-            min=4.5,
-            max=88.5,
-            step=3,
-            value=19.5,
+        AB2=FloatText(
+            value=20,
+            min=0.001,
             continuous_update=False,
             description="$\\frac{AB}{2}$"
         ),
-        h0=FloatSlider(
+        h0=FloatText(
             min=0.0,
-            max=20.0,
-            step=1.0,
             value=10.0,
             continuous_update=False,
             description="$h_1$",
         ),
-        h1=FloatSlider(
-            min=0,
-            max=20.0,
-            step=1.0,
-            value=10.0,
+        h1=FloatText(
+            min=0.0,
+            value=10,
             continuous_update=False,
             description="$h_2$",
         ),
