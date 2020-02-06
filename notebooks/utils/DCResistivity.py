@@ -1529,6 +1529,7 @@ class DC1D3LayerApp(object):
                     srclist.append(src)
                 self.survey = DC.Survey(srclist)
                 self.data = Data(survey=self.survey, dobs=df['App. Res. (Ohm m)'].values)
+                print(f"{fname} loaded")
             except:
                 print("Reading input failed")
 
@@ -1564,8 +1565,8 @@ class DC1D3LayerApp(object):
             description='filename:',
             disabled=False
         )
-        load = widgets.Checkbox(
-            value=True, description="load", disabled=False
+        load = widgets.ToggleButton(
+            value=False, description="load", disabled=False
         )
         widgets.interact(self.read_ves, fname=obs_name, load=load)
 
@@ -1614,7 +1615,7 @@ class DC1D3LayerApp(object):
             rho_3=rho_3,
             t_1=t_1,
             t_2=t_2
-            )
+        )
 
     def run_inversion(
             self,
