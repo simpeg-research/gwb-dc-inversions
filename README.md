@@ -49,6 +49,12 @@ To setup your software environment, please use conda forge and install SimPEG:
 conda install -c conda-forge/label/beta simpeg
 ```
 
+If this is not successful, try:
+
+```
+conda install -c conda-forge/label/beta -c conda-forge simpeg
+```
+
 #### Step 4: Launch Jupyter
 
 You can then launch Jupyter
