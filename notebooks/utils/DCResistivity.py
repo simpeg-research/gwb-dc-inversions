@@ -1563,8 +1563,9 @@ class DC1D3LayerApp(object):
         files = os.listdir("assets")
         obs_name = widgets.Dropdown(
             options=files,
-            value='Mawlamyaing_data_locations_3.csv',
+            value='3_layer_synthetic_data.csv',
             description="filename: ",
+            layout={'width': 'max-content'}
         )
         # obs_name = widgets.Text(
         #     value='./assets/Mawlamyaing_data_locations_3.csv',
