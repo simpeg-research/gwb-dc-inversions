@@ -1560,7 +1560,7 @@ class DC1D3LayerApp(object):
         return ab, data_tmp
 
     def interact_load_obs(self):
-        files = os.listdir("assets")
+        files = sorted(os.listdir("assets"))
         obs_name = widgets.Dropdown(
             options=files,
             value='3_layer_synthetic_data.csv',
