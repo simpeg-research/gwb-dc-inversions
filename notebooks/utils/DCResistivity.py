@@ -1509,6 +1509,7 @@ class DCRInversionApp(object):
 class DC1D3LayerApp(object):
 
     def read_ves(self, fname, load):
+        fname = f"./assets/{fname}"
         if load:
             try:
                 df = pd.read_csv(fname)
@@ -1559,12 +1560,18 @@ class DC1D3LayerApp(object):
         return ab, data_tmp
 
     def interact_load_obs(self):
-        obs_name = widgets.Text(
-            value='./assets/Mawlamyaing_data_locations_3.csv',
-            placeholder='Type something',
-            description='filename:',
-            disabled=False
+        files = os.listdir("assets")
+        obs_name = widgets.Dropdown(
+            options=files,
+            value='Mawlamyaing_data_locations_3.csv',
+            description="filename: ",
         )
+        # obs_name = widgets.Text(
+        #     value='./assets/Mawlamyaing_data_locations_3.csv',
+        #     placeholder='Type something',
+        #     description='filename:',
+        #     disabled=False
+        # )
         load = widgets.ToggleButton(
             value=False, description="load", disabled=False
         )
