@@ -631,6 +631,7 @@ class DCRInversionApp(object):
     def load_obs(self, fname, topo_name, load, input_type):
         if load:
             try:
+                fname = f"./2d_data/{fname}"
                 if input_type == 'csv':
                     self.survey = self.IO.read_dc_data_csv(fname)
                 elif input_type == 'ubc_dc2d':
@@ -800,12 +801,48 @@ class DCRInversionApp(object):
         )
 
     def interact_load_obs(self):
-        obs_name = widgets.Text(
-            # value='./ubc_dc_data/obs_dc.dat',
-            value='./dc.csv',
-            placeholder='Type something',
-            description='obsfile:',
-            disabled=False
+        # obs_name = widgets.Text(
+        #     # value='./ubc_dc_data/obs_dc.dat',
+        #     value='./dc.csv',
+        #     placeholder='Type something',
+        #     description='obsfile:',
+        #     disabled=False
+        # )
+
+        # topo_name = widgets.Text(
+        #     # value='./ubc_dc_data/obs_dc.dat',
+        #     value='None',
+        #     placeholder='Type something',
+        #     description='topofile:',
+        #     disabled=False
+        # )
+
+        # load = widgets.Checkbox(
+        #     value=True, description="load", disabled=False
+        # )
+        # input_type = widgets.ToggleButtons(
+        #     options=["csv", "ubc_dc2d"],
+        #     value="csv",
+        #     description="input type"
+        # )
+
+
+        # widgets.interact(
+        #     self.load_obs, fname=obs_name, topo_name=topo_name, load=load, input_type=input_type
+        # )
+
+        input_type = widgets.ToggleButtons(
+            options=["csv", "ubc_dc2d"],
+            value="csv",
+            description="input type"
+        )
+
+        files = sorted(os.listdir("2d_data"))
+        obs_name = widgets.Dropdown(
+            options=files,
+            value='dc.csv',
+            description="filename: ",
+            layout={'width': 'max-content'}
         )
 
         topo_name = widgets.Text(
@@ -816,15 +853,9 @@ class DCRInversionApp(object):
             disabled=False
         )
 
-        load = widgets.Checkbox(
-            value=True, description="load", disabled=False
+        load = widgets.ToggleButton(
+            value=False, description="load", disabled=False
         )
-        input_type = widgets.ToggleButtons(
-            options=["csv", "ubc_dc2d"],
-            value="csv",
-            description="input type"
-        )
-
 
         widgets.interact(
             self.load_obs, fname=obs_name, topo_name=topo_name, load=load, input_type=input_type
@@ -1509,7 +1540,7 @@ class DCRInversionApp(object):
 class DC1D3LayerApp(object):
 
     def read_ves(self, fname, load):
-        fname = f"./assets/{fname}"
+        fname = f"./sounding_data/{fname}"
         if load:
             try:
                 df = pd.read_csv(fname)
@@ -1560,7 +1591,7 @@ class DC1D3LayerApp(object):
         return ab, data_tmp
 
     def interact_load_obs(self):
-        files = sorted(os.listdir("assets"))
+        files = sorted(os.listdir("sounding_data"))
         obs_name = widgets.Dropdown(
             options=files,
             value='3_layer_synthetic_data.csv',
