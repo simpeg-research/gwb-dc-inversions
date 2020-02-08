@@ -603,7 +603,7 @@ class DCRInversionApp(object):
             topo=topo,
             method='linear',
             dx=dx,
-            dy=dz,
+            dz=dz,
             corezlength=corezlength
         )
 
@@ -863,7 +863,7 @@ class DCRInversionApp(object):
         # )
 
         load = widgets.ToggleButton(
-            value=False, description="load", disabled=False
+            value=True, description="load", disabled=False
         )
 
         widgets.interact(
@@ -1305,35 +1305,39 @@ class DCRInversionApp(object):
         show_core=True,
         aspect_ratio=1,
     ):
-        if plot_type == "models":
-            self.plot_model_doi(
-                vmin=rho_min,
-                vmax=rho_max,
-                show_core=show_core,
-                show_grid=show_grid,
-                scale=scale,
-                aspect_ratio=aspect_ratio,
-            )
-        elif plot_type == "doi":
-            self.plot_doi_index(
-                show_core=show_core,
-                show_grid=show_grid,
-                vmin=0,
-                vmax=1,
-                level=doi_level,
-                aspect_ratio=aspect_ratio,
-            )
-        elif plot_type == "final":
-            self.plot_model_with_doi(
-                vmin=rho_min,
-                vmax=rho_max,
-                show_core=show_core,
-                show_grid=show_grid,
-                scale=scale,
-                aspect_ratio=aspect_ratio,
-            )
-        else:
-            raise NotImplementedError()
+        try:
+            if plot_type == "models":
+                self.plot_model_doi(
+                    vmin=rho_min,
+                    vmax=rho_max,
+                    show_core=show_core,
+                    show_grid=show_grid,
+                    scale=scale,
+                    aspect_ratio=aspect_ratio,
+                )
+            elif plot_type == "doi":
+                self.plot_doi_index(
+                    show_core=show_core,
+                    show_grid=show_grid,
+                    vmin=0,
+                    vmax=1,
+                    level=doi_level,
+                    aspect_ratio=aspect_ratio,
+                )
+            elif plot_type == "final":
+                self.plot_model_with_doi(
+                    vmin=rho_min,
+                    vmax=rho_max,
+                    show_core=show_core,
+                    show_grid=show_grid,
+                    scale=scale,
+                    aspect_ratio=aspect_ratio,
+                )
+            else:
+                raise NotImplementedError()
+        except:
+            print (">> an inversion for doi calculation is needed to be run")
+
 
     def run_doi(self, factor, run=False):
         self.factor = factor
@@ -1808,3 +1812,558 @@ class DC1D3LayerApp(object):
         widgets.interact(self.plot_inversion_results,
             iteration=iteration
         )
+
+
+class DC1DInversionApp(object):
+
+    uncertainty = None
+    doi = False
+    mesh_1d = None
+
+    def read_ves(self, fname, load):
+        fname = f"./sounding_data/{fname}"
+        if load:
+            try:
+                df = pd.read_csv(fname)
+                ab_2 = df['AB/2 (m)']
+                mn_2 = df['MN/2 (m)']
+                n_sounding = ab_2.size
+                # We generate tx and rx lists:
+                srclist = []
+                for ii in range(n_sounding):
+                    a_loc = ab_2[ii]
+                    b_loc = -ab_2[ii]
+                    m_loc = mn_2[ii]
+                    n_loc = -mn_2[ii]
+                    rx = DC.Rx.Dipole(np.r_[m_loc, 0, 0], np.r_[n_loc, 0, 0])
+                    locA = np.r_[a_loc, 0, 0]
+                    locB = np.r_[b_loc, 0, 0]
+                    src = DC.Src.Dipole([rx], locA, locB)
+                    srclist.append(src)
+                self.survey = DC.Survey(srclist)
+                self.data = Data(survey=self.survey, dobs=df['App. Res. (Ohm m)'].values)
+                print(f"{fname} loaded")
+            except:
+                print("Reading input failed")
+
+    def set_mesh(
+        self,
+        n_layer,
+        dz_min,
+        geometric_factor,
+        plotit=True
+    ):
+        # ab = simulation.electrode_separations['AB']
+        # mn = simulation.electrode_separations['MN']
+        layer_thicknesses = dz_min*geometric_factor**np.arange(n_layer)
+        self.mesh_1d = TensorMesh([layer_thicknesses])
+        if plotit:
+            fig, ax = plt.subplots(1,1, figsize=(3, 6))
+            xlim = (0, 50)
+            for i_layer in range(n_layer):
+                ax.plot(xlim, -np.ones(2)*self.mesh_1d.vectorNx[i_layer], 'k--', lw=1)
+            ax.set_xlim(xlim)
+            ax.set_xticks([])
+            ax.set_ylabel("Depth (m)")
+
+    def interact_set_mesh(self):
+
+        dz_min = widgets.FloatText(value=2.)
+        n_layer = widgets.IntSlider(
+            min=1,
+            max=50,
+            value=25,
+            continuous_update=False
+        )
+        geometric_factor = widgets.FloatText(
+            value=1.1,
+            description='factor'
+        )
+
+        def foo(dz_min, n_layer, geometric_factor):
+            return self.set_mesh(
+                n_layer,
+                dz_min,
+                geometric_factor
+            )
+
+        widgets.interact(
+            foo,
+            dz_min=dz_min,
+            n_layer=n_layer,
+            geometric_factor=geometric_factor,
+        )
+
+    def get_simulation(self):
+        if self.mesh_1d is None:
+            self.set_mesh(2, 25, 1.1, plotit=False)
+        mapping = maps.ExpMap(self.mesh_1d)
+        simulation = DC.DCSimulation_1D(
+            rhoMap=mapping,
+            thicknesses=self.mesh_1d.hx[:-1],
+            Solver=Pardiso,
+            survey=self.survey,
+            data_type="apparent_resistivity"
+        )
+        return simulation
+
+    def get_initial_resistivity(self):
+        out = np.histogram(np.log10(abs(self.data.dobs)))
+        return 10**out[1][np.argmax(out[0])]
+
+    def interact_load_obs(self):
+        files = sorted(os.listdir("sounding_data"))
+        obs_name = widgets.Dropdown(
+            options=files,
+            value='3_layer_synthetic_data.csv',
+            description="filename: ",
+            layout={'width': 'max-content'}
+        )
+        # obs_name = widgets.Text(
+        #     value='./assets/Mawlamyaing_data_locations_3.csv',
+        #     placeholder='Type something',
+        #     description='filename:',
+        #     disabled=False
+        # )
+        load = widgets.ToggleButton(
+            value=True, description="load", disabled=False
+        )
+        widgets.interact(self.read_ves, fname=obs_name, load=load)
+
+    def plot_obs_data(self, plot_type, aspect_ratio):
+        fig, ax = plt.subplots(1, 1, figsize=(10, 5))
+        simulation = self.get_simulation()
+        ab2 = simulation.electrode_separations['AB']
+        if plot_type == "sounding":
+            ax.loglog(ab2, self.data.dobs, 'o-')
+            ax.set_aspect(aspect_ratio)
+            ax.set_xlabel("AB/2")
+            ax.set_ylabel('App. Res ($\Omega$m)')
+            ax.grid(which='both')
+        elif plot_type == "histogram":
+            out = ax.hist(np.log10(self.data.dobs), edgecolor='k')
+            xlabel = 'App. Res ($\Omega$m)'
+            xticks = ax.get_xticks()
+            ax.set_xticklabels([ ("%.1f")%(10**xtick)for xtick in xticks])
+            ax.set_ylabel('Count')
+            ax.set_xlabel(xlabel)
+
+    def interact_plot_obs_data(self):
+        plot_type = widgets.ToggleButtons(
+            options=["sounding", "histogram"],
+            value="sounding",
+            description="plot type"
+        )
+        aspect_ratio = widgets.FloatText(value=1)
+
+        widgets.interact(
+            self.plot_obs_data,
+            plot_type=plot_type,
+            aspect_ratio=aspect_ratio
+        )
+
+    def set_uncertainty(self, percentage, floor, set_value=True):
+        self.percentage = percentage
+        self.floor = floor
+
+        if set_value:
+            self.uncertainty = abs(self.data.dobs) * percentage / 100.+ floor
+            print ((">> percent error: %.1f and floor error: %1.e are set") % (percentage, floor))
+
+    def interact_set_uncertainty(self):
+        percentage = widgets.FloatText(value=5.)
+        floor = widgets.FloatText(value=0.)
+        widgets.interact(
+            self.set_uncertainty,
+            percentage=percentage,
+            floor=floor
+        )
+
+    def plot_resistivity(self, hz, rho, ax=None, **kwargs):
+        mesh_1d = TensorMesh([np.r_[hz, 100]])
+        StaticUtils.plot_layer(rho, mesh_1d, ax=ax, **kwargs)
+
+    def run_inversion(
+        self,
+        rho_0,
+        rho_ref=None,
+        alpha_s=1e-3,
+        alpha_z=1,
+        maxIter=20,
+        chifact=1.,
+        beta0_ratio=1.,
+        coolingFactor=5,
+        coolingRate=2,
+        rho_upper=np.Inf,
+        rho_lower=-np.Inf,
+        run=True,
+    ):
+        if run:
+            maxIterCG=20
+            self.simulation = self.get_simulation()
+            m0 = np.ones(self.mesh_1d.nC) * np.log(rho_0)
+            if rho_ref is None:
+                rho_ref = rho_0
+            mref = np.ones(self.mesh_1d.nC) * np.log(rho_ref)
+
+            dmis = data_misfit.L2DataMisfit(
+                data=self.data, simulation=self.simulation
+            )
+            dmis.W = 1./self.uncertainty
+            reg = regularization.Tikhonov(
+                self.mesh_1d,
+                alpha_s=alpha_s,
+                alpha_x=alpha_z,
+                mapping=maps.IdentityMap(nP=self.mesh_1d.nC),
+                mref=mref
+            )
+            # Personal preference for this solver with a Jacobi preconditioner
+            opt = optimization.ProjectedGNCG(
+                maxIter=maxIter, maxIterCG=maxIterCG, print_type='ubc'
+            )
+            opt.remember('xc')
+            invProb = inverse_problem.BaseInvProblem(dmis, reg, opt)
+            beta = directives.BetaEstimate_ByEig(beta0_ratio=beta0_ratio)
+            target = directives.TargetMisfit(chifact=chifact)
+            beta_schedule = directives.BetaSchedule(
+                coolingFactor=coolingFactor,
+                coolingRate=coolingRate
+            )
+            save = directives.SaveOutputEveryIteration()
+            save_outputs = directives.SaveOutputDictEveryIteration()
+            sense_weight = directives.UpdateSensitivityWeights()
+            inv = inversion.BaseInversion(
+                invProb,
+                directiveList=[beta, target, beta_schedule, save_outputs]
+            )
+
+            minv = inv.run(m0)
+
+            # Store all inversion parameters
+
+            if self.doi:
+                self.m_doi = minv.copy()
+            else:
+                self.alpha_s = alpha_s
+                self.alpha_z = alpha_z
+                self.rho_0 = rho_0
+                self.rho_ref = rho_ref
+                self.beta0_ratio = beta0_ratio
+                self.chifact = chifact
+                self.maxIter = maxIter
+                self.coolingFactor = coolingFactor
+                self.coolingRate = coolingRate
+
+                self.phi_d = []
+                self.phi_m = []
+                self.m = []
+                self.dpred = []
+
+                for key in save_outputs.outDict.keys():
+                    self.phi_d.append(save_outputs.outDict[key]["phi_d"].copy() * 2.0)
+                    self.phi_m.append(save_outputs.outDict[key]["phi_m"].copy() * 2.0)
+                    self.m.append(save_outputs.outDict[key]["m"].copy())
+                    self.dpred.append(save_outputs.outDict[key]["dpred"].copy())
+            os.system("rm -f *.txt")
+
+        else:
+            pass
+
+    def interact_run_inversion(self):
+        run = widgets.Checkbox(
+            value=False, description="run", disabled=False
+        )
+
+        rho_initial = np.ceil(self.get_initial_resistivity()                )
+        maxIter=widgets.IntText(value=10, continuous_update=False)
+        rho_0=widgets.FloatText(
+            value=rho_initial, continuous_update=False,
+            description="$\\rho_0$"
+        )
+        rho_ref=widgets.FloatText(
+            value=rho_initial, continuous_update=False,
+            description="$\\rho_{ref}$"
+            )
+        percentage=widgets.FloatText(value=self.percentage, continuous_update=False)
+        floor=widgets.FloatText(value=self.floor, continuous_update=False)
+        chifact=widgets.FloatText(value=1.0, continuous_update=False)
+        beta0_ratio=widgets.FloatText(value=10., continuous_update=False)
+        coolingFactor=widgets.FloatSlider(
+            min=0.1, max=10, step=1, value=2, continuous_update=False
+        )
+        coolingRate=widgets.IntSlider(
+            min=1, max=10, step=1, value=1, continuous_update=False,
+            description='n_iter / beta'
+        )
+        alpha_s=widgets.FloatText(
+            value=0.1, continuous_update=False,
+            description="$\\alpha_{s}$"
+        )
+        alpha_z=widgets.FloatText(
+            value=1, continuous_update=False,
+            description="$\\alpha_{z}$"
+        )
+
+        widgets.interact(
+            self.run_inversion,
+            run=run,
+            rho_initial=rho_initial,
+            maxIter=maxIter,
+            rho_0=rho_0,
+            rho_ref=rho_ref,
+            percentage=percentage,
+            floor=floor,
+            chifact=chifact,
+            beta0_ratio=beta0_ratio,
+            coolingFactor=coolingFactor,
+            coolingRate=coolingRate,
+            alpha_s=alpha_s,
+            alpha_z=alpha_z
+        )
+
+    def plot_inversion_results(
+        self,
+        iteration=1,
+        curve_type='misfit',
+        scale='log',
+        plot_type='misfit_curve',
+        rho_min=100,
+        rho_max=1000,
+    ):
+        if plot_type == "misfit_curve":
+            self.plot_misfit_curve(
+                iteration, curve_type=curve_type,
+                scale=scale
+            )
+        elif plot_type == "model":
+            self.plot_model(
+                iteration,
+                vmin=rho_min,
+                vmax=rho_max,
+            )
+        elif plot_type == "data_misfit":
+            self.plot_data_misfit(
+                iteration,
+            )
+        else:
+            raise NotImplementedError()
+
+    def plot_model(self, iteration, vmin=None, vmax=None, show_core=True, show_grid=False):
+        clim = (vmin, vmax)
+        # inds_core, self. = Utils.ExtractCoreMesh(self.IO.xyzlim, self.mesh)
+        fig, ax = plt.subplots(1, 1, figsize=(5, 6))
+        rho = np.exp(self.m[iteration-1])
+        if clim is None:
+            vmin, vmax = rho.min(), rho.max()
+        else:
+            vmin, vmax = clim
+
+        StaticUtils.plot_layer(
+            rho, self.mesh_1d, ax=ax
+        )
+        ticks = np.linspace(vmin, vmax, 3)
+        ax.set_xlabel("Resistivity ($\Omega$m)")
+        ax.set_ylabel("Depth (m)")
+        ax.set_xlim(clim)
+        plt.tight_layout()
+
+    def plot_misfit_curve(self, iteration, scale='linear', curve_type='misfit'):
+        fig, ax = plt.subplots(1,1, figsize=(10, 5))
+        if curve_type == "misfit":
+            ax_1 = ax.twinx()
+            ax.plot(np.arange(len(self.phi_m))+1, self.phi_d, 'k.-')
+            ax_1.plot(np.arange(len(self.phi_d))+1, self.phi_m, 'r.-')
+            ax.plot(iteration, self.phi_d[iteration-1], 'ko', ms=10)
+            ax_1.plot(iteration, self.phi_m[iteration-1], 'ro', ms=10)
+
+            xlim = plt.xlim()
+            ax.plot(xlim, np.ones(2)*self.survey.nD, 'k--')
+            ax.set_xlim(xlim)
+            ax.set_xlabel("Iteration")
+            ax.set_ylabel("$\phi_d$", fontsize=16)
+            ax_1.set_ylabel("$\phi_m$", fontsize=16)
+            ax.set_yscale(scale)
+            ax_1.set_yscale(scale)
+            ax.set_title(("Misfit / Target misfit: %1.f / %.1f")%(self.phi_d[iteration-1], self.survey.nD))
+        elif curve_type == "tikhonov":
+            ax.plot(self.phi_m, self.phi_d, 'k.-')
+            ax.plot(self.phi_m[iteration-1], self.phi_d[iteration-1], 'ko', ms=10)
+            ax.set_ylabel("$\phi_d$", fontsize=16)
+            ax.set_xlabel("$\phi_m$", fontsize=16)
+            ax.set_xscale(scale)
+            ax.set_yscale(scale)
+
+    def plot_data_misfit(self, iteration):
+        vmin, vmax = self.data.dobs.min(), self.data.dobs.max()
+        dpred = self.dpred[iteration-1]
+        simulation = self.get_simulation()
+        ab2 = simulation.electrode_separations['AB']
+
+        fig, axs = plt.subplots(2,1, figsize = (10, 9))
+        axs[0].loglog(ab2, self.data.dobs, 'kx', mx=10)
+        axs[0].loglog(ab2, self.data.dpred, 'k-')
+        axs[0].set_aspect(aspect_ratio)
+        axs[0].set_xlabel("AB/2")
+        axs[0].set_ylabel('App. Res ($\Omega$m)')
+        axs[0].grid(which='both')
+        axs[0].legend(("Obs.", "Pred."))
+
+        misfit = (dpred-dobs) / self.uncertainty
+        axs[1].loglog(ab2, misfit, 'kx', mx=10)
+        axs[1].set_aspect(aspect_ratio)
+        axs[1].set_xlabel("AB/2")
+        axs[1].set_ylabel('Normalized misfit')
+        axs[1].grid(which='both')
+
+        titles = ["Observed/Predicted", "Normalized misfit"]
+
+        for i_ax, ax in enumerate(axs):
+            ax.set_title(titles[i_ax])
+            ax.set_aspect(aspect_ratio)
+
+    def interact_plot_inversion_results(self):
+        try:
+            iteration = widgets.IntSlider(
+                min=1, max=len(self.m), step=1, value=1, continuous_update=False
+            )
+            curve_type = widgets.ToggleButtons(
+                options=["misfit", "tikhonov"],
+                value="misfit",
+                description="curve type"
+            )
+            scale=widgets.ToggleButtons(
+                options=["linear", "log"],
+                value="log",
+                description="scale"
+            )
+            plot_type = widgets.ToggleButtons(
+                options=["misfit_curve", "model", "data_misfit"],
+                value="misfit_curve",
+                description="plot type"
+            )
+            rho = np.exp(self.m[-1])
+            rho_min=widgets.FloatText(
+                value=np.ceil(rho.min()*0.8), continuous_update=False,
+                description="$\\rho_{min}$"
+            )
+            rho_max=widgets.FloatText(
+                value=np.ceil(rho.max()*1.2), continuous_update=False,
+                description="$\\rho_{max}$"
+            )
+
+            aspect_ratio=widgets.FloatText(
+                value=1, continuous_update=False,
+            )
+
+            widgets.interact(
+                self.plot_inversion_results,
+                iteration=iteration,
+                curve_type=curve_type,
+                scale=scale,
+                plot_type=plot_type,
+                rho_min=rho_min,
+                rho_max=rho_max,
+                aspect_ratio=aspect_ratio
+            )
+        except:
+            print (">> no inversion results yet")
+
+    def run_doi(self, factor, run=False):
+        self.factor = factor
+        self.doi = True
+        if run:
+            self.run_inversion(
+                self.rho_0 * factor,
+                self.rho_ref * factor,
+                alpha_s=self.alpha_s,
+                alpha_z=self.alpha_z,
+                maxIter=self.maxIter,
+                chifact=self.chifact,
+                beta0_ratio=self.beta0_ratio,
+                coolingFactor=self.coolingFactor,
+                coolingRate=self.coolingRate,
+                run=True,
+            )
+        self.doi = False
+
+    def interact_run_doi(self):
+
+        widgets.interact(self.run_doi, factor=widgets.FloatText(0.5))
+
+    def interact_plot_doi_results(self):
+        try:
+            rho = np.exp(self.m[-1])
+            rho_min = widgets.FloatText(
+                value=np.ceil(rho.min()),
+                continuous_update=False,
+                description="$\\rho_{min}$",
+            )
+            rho_max = widgets.FloatText(
+                value=np.ceil(rho.max()*1.2),
+                continuous_update=False,
+                description="$\\rho_{max}$",
+            )
+
+            doi_level = widgets.FloatSlider(
+                value=0.3, step=0.01, min=0, max=1,
+                continuous_update=False
+
+            )
+
+            widgets.interact(
+                self.plot_model_doi,
+                rho_min=rho_min,
+                rho_max=rho_max,
+                doi_level=doi_level,
+            )
+        except:
+            print (">> an inversion for doi calculation is needed to be run")
+
+    def plot_model_doi(
+            self,
+            rho_min=None,
+            rho_max=None,
+            doi_level=None,
+    ):
+        try:
+            m1 = self.m[-1]
+            m2 = self.m_doi
+            rho1 = np.exp(m1)
+            rho2 = np.exp(m2)
+
+            mref_1 = np.log(1.0 / self.rho_ref)
+            mref_2 = np.log(1.0 / (self.rho_ref * self.factor))
+
+            def compute_doi_index(m1, m2, mref_1, mref_2):
+                doi_index = (m1 - m2) / (mref_1 - mref_2)
+                return doi_index
+
+            doi_index = abs(compute_doi_index(m1, m2, mref_1, mref_2))
+
+            vmin, vmax = np.r_[rho1, rho2].min()*0.8, np.r_[rho1, rho2].max()*1.2
+
+            fig, axs = plt.subplots(1, 2, figsize=(10, 6))
+            ax1 = axs[0]
+            ax2 = axs[1]
+            StaticUtils.plot_layer(
+                rho1, self.mesh_1d, ax=ax1, **{'color': 'k'}
+            )
+            StaticUtils.plot_layer(
+                rho2, self.mesh_1d, ax=ax1, **{'color': 'grey', 'linestyle': '--'}
+            )
+            ax1.set_xlim(vmin, vmax)
+            StaticUtils.plot_layer(
+                doi_index, self.mesh_1d, xscale='linear', ax=ax2
+            )
+            for ii in range(self.mesh_1d.nC-1, -1, -1):
+                if doi_index[ii] < doi_level:
+                    break
+            xlim = ax1.get_xlim()
+            ax1.legend(("m1", "m2"))
+            ax1.plot(xlim, -self.mesh_1d.vectorNx[:-1][ii]*np.ones(2), 'k--')
+            ax2.plot((0, 2), -self.mesh_1d.vectorNx[:-1][ii]*np.ones(2), 'k--')
+            ax2.set_xlabel("DOI index")
+            ax2.set_xlim((0, 2))
+            plt.tight_layout()
+        except:
+            print(">> an inversion for doi calculation is needed to be run")
