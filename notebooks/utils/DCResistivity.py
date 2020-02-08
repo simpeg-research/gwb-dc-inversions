@@ -1338,7 +1338,6 @@ class DCRInversionApp(object):
         except:
             print (">> an inversion for doi calculation is needed to be run")
 
-
     def run_doi(self, factor, run=False):
         self.factor = factor
         self.doi = True
@@ -1618,7 +1617,7 @@ class DC1D3LayerApp(object):
         #     disabled=False
         # )
         load = widgets.ToggleButton(
-            value=False, description="load", disabled=False
+            value=True, description="load", disabled=False
         )
         widgets.interact(self.read_ves, fname=obs_name, load=load)
 
