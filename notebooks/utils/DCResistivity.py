@@ -632,6 +632,7 @@ class DCRInversionApp(object):
         if load:
             try:
                 fname = f"./2d_data/{fname}"
+                topo_name = f"./topography/{topo_name}"
                 if input_type == 'csv':
                     self.survey = self.IO.read_dc_data_csv(fname)
                 elif input_type == 'ubc_dc2d':
@@ -845,13 +846,21 @@ class DCRInversionApp(object):
             layout={'width': 'max-content'}
         )
 
-        topo_name = widgets.Text(
-            # value='./ubc_dc_data/obs_dc.dat',
-            value='None',
-            placeholder='Type something',
-            description='topofile:',
-            disabled=False
+        topo_files = sorted(os.listdir("topography"))
+        topo_name = widgets.Dropdown(
+            options=topo_files,
+            value=None,
+            description="topography: ",
+            layout={'width': 'max-content'}
         )
+
+        # topo_name = widgets.Text(
+        #     # value='./ubc_dc_data/obs_dc.dat',
+        #     value='None',
+        #     placeholder='Type something',
+        #     description='topofile:',
+        #     disabled=False
+        # )
 
         load = widgets.ToggleButton(
             value=False, description="load", disabled=False
