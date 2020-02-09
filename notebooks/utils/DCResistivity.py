@@ -2200,25 +2200,27 @@ class DC1DInversionApp(object):
 
         fig, axs = plt.subplots(2,1, figsize = (10, 9))
         axs[0].loglog(ab2, self.data.dobs, 'kx', ms=10)
-        axs[0].loglog(ab2, self.data.dpred, 'k-')
-        axs[0].set_aspect(aspect_ratio)
+        axs[0].loglog(ab2, dpred, 'k-')
+        # axs[0].set_aspect(aspect_ratio)
         axs[0].set_xlabel("AB/2")
         axs[0].set_ylabel('App. Res ($\Omega$m)')
         axs[0].grid(which='both')
         axs[0].legend(("Obs.", "Pred."))
 
-        misfit = (dpred-dobs) / self.uncertainty
-        axs[1].loglog(ab2, misfit, 'kx', mx=10)
-        axs[1].set_aspect(aspect_ratio)
+        misfit = (dpred-self.data.dobs) / self.uncertainty
+        axs[1].semilogx(ab2, misfit, 'k-', ms=10)
+        # axs[1].set_aspect(aspect_ratio)
         axs[1].set_xlabel("AB/2")
         axs[1].set_ylabel('Normalized misfit')
         axs[1].grid(which='both')
+        axs[1].set_ylim(-3,3)
 
         titles = ["Observed/Predicted", "Normalized misfit"]
 
         for i_ax, ax in enumerate(axs):
             ax.set_title(titles[i_ax])
-            ax.set_aspect(aspect_ratio)
+            # ax.set_aspect(aspect_ratio)
+        plt.tight_layout()
 
     def interact_plot_inversion_results(self):
         try:
