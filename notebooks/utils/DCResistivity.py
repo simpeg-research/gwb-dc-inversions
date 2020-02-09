@@ -2199,7 +2199,7 @@ class DC1DInversionApp(object):
         ab2 = simulation.electrode_separations['AB']
 
         fig, axs = plt.subplots(2,1, figsize = (10, 9))
-        axs[0].loglog(ab2, self.data.dobs, 'kx', mx=10)
+        axs[0].loglog(ab2, self.data.dobs, 'kx', ms=10)
         axs[0].loglog(ab2, self.data.dpred, 'k-')
         axs[0].set_aspect(aspect_ratio)
         axs[0].set_xlabel("AB/2")
