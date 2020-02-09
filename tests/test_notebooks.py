@@ -10,6 +10,7 @@ NBDIR = os.path.sep.join(
     os.path.abspath(__file__).split(os.path.sep)[:-2] + ['notebooks']
 )
 
+
 IGNORE = [
     "DC-1d-parametric-inversion",
     "DC-1d-smooth-inversion",
