@@ -14,8 +14,7 @@ dependencies:
   - dask
   - zarr
   - sparse
+  - discretize
   - pip:
-    - pymatsolver
-    - discretize
     - git+https://github.com/simpeg/simpeg.git@simulation
     - empymod
