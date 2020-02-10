@@ -934,7 +934,7 @@ class DCRInversionApp(object):
             ax.set_title(titles[i_ax])
             ax.set_aspect(aspect_ratio)
 
-    def plot_model(self, iteration, vmin=None, vmax=None, show_core=True, show_grid=False, aspect_ratio=1):
+    def plot_model(self, iteration, vmin=None, vmax=None, aspect_ratio=1, show_core=True, show_grid=False, reverse_color=False):
         clim = (vmin, vmax)
         # inds_core, self. = Utils.ExtractCoreMesh(self.IO.xyzlim, self.mesh)
         fig, ax = plt.subplots(1,1, figsize=(10, 5))
@@ -945,8 +945,14 @@ class DCRInversionApp(object):
             vmin, vmax = tmp[self.actind].min(), tmp[self.actind].max()
         else:
             vmin, vmax = np.log10(clim[0]), np.log10(clim[1])
+        
+        if reverse_color==True:
+            cmap_type='jet_r'
+        else:
+            cmap_type='jet'
+
         out = self.mesh.plotImage(
-            tmp, grid=show_grid, clim=(vmin, vmax), pcolorOpts={'cmap':'jet_r'}, ax=ax,
+            tmp, grid=show_grid, clim=(vmin, vmax), pcolorOpts={'cmap':cmap_type}, ax=ax,
             gridOpts={"color": "white", "alpha": 0.5}
         )
         ticks = np.linspace(vmin, vmax, 3)
@@ -1028,9 +1034,10 @@ class DCRInversionApp(object):
         plot_type='misfit_curve',
         rho_min=100,
         rho_max=1000,
+        aspect_ratio=1,
         show_grid=False,
         show_core=True,
-        aspect_ratio=1,
+        reverse_color=False
     ):
         if plot_type == "misfit_curve":
             self.plot_misfit_curve(
@@ -1042,9 +1049,10 @@ class DCRInversionApp(object):
                 iteration,
                 vmin=rho_min,
                 vmax=rho_max,
+                aspect_ratio=aspect_ratio,
                 show_core=show_core,
                 show_grid=show_grid,
-                aspect_ratio=aspect_ratio
+                reverse_color=reverse_color
             )
         elif plot_type == "data_misfit":
             self.plot_data_misfit(
@@ -1522,16 +1530,17 @@ class DCRInversionApp(object):
                 value=np.ceil(rho.max()), continuous_update=False,
                 description="$\\rho_{max}$"
             )
-
-            show_grid = widgets.Checkbox(
-                value=False, description="show grid?", disabled=False
-            )
-            show_core = widgets.Checkbox(
-                value=True, description="show core?", disabled=False
-            )
-
             aspect_ratio=widgets.FloatText(
                 value=1, continuous_update=False,
+            )
+            show_grid = widgets.Checkbox(
+                value=False, description="show grid on model plot?", disabled=False
+            )
+            show_core = widgets.Checkbox(
+                value=True, description="show core on model plot?", disabled=False
+            )
+            reverse_color = widgets.Checkbox(
+                value=False, description="reverse color map on model plot?", disabled=False
             )
 
             widgets.interact(
@@ -1542,9 +1551,10 @@ class DCRInversionApp(object):
                 plot_type=plot_type,
                 rho_min=rho_min,
                 rho_max=rho_max,
+                aspect_ratio=aspect_ratio,
                 show_grid=show_grid,
                 show_core=show_core,
-                aspect_ratio=aspect_ratio
+                reverse_color=reverse_color
             )
         except:
             print (">> no inversion results yet")
