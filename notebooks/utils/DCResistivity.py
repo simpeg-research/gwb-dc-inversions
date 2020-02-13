@@ -1777,11 +1777,11 @@ class DC1D3LayerApp(object):
 
         percentage = widgets.FloatText(
             value=1., continuous_update=False,
-            description='std (%)'
+            description='percentage'
             )
         floor = widgets.FloatText(
             value=10.0, continuous_update=False,
-            description='noise floor'
+            description='floor'
             )
         rho0 = widgets.FloatText(
             value=np.median(self.data.dobs),
@@ -1799,7 +1799,7 @@ class DC1D3LayerApp(object):
         )
         max_iteration = widgets.IntText(
             value=12, continuous_update=False,
-            description='Max iterations'
+            description='maxIter'
         )
 
         widgets.interact(
