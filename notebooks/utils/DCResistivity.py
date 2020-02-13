@@ -579,7 +579,7 @@ class DCRInversionApp(object):
             self._JtJ = np.sqrt((self.Jmatrix ** 2).sum(axis=0))
         return self._JtJ
 
-    def set_mesh(self, dx=None, dz=None, corezlength=None, i_src=None):
+    def set_mesh(self, dx=None, dz=None, corezlength=None, npad_x=10, npad_z=10, i_src=None):
 
         sort_ind = np.argsort(self.IO.electrode_locations[:,0])
         if self.topo is None:
@@ -599,12 +599,20 @@ class DCRInversionApp(object):
         if corezlength == 'None':
             corezlength = None
 
+        if npad_x == 'None':
+            npad_x = 10
+
+        if npad_z == 'None':
+            npad_z = 10
+
         self.mesh, self.actind = self.IO.set_mesh(
             topo=topo,
             method='linear',
             dx=dx,
             dz=dz,
-            corezlength=corezlength
+            corezlength=corezlength,
+            npad_x=npad_x,
+            npad_z=npad_z
         )
 
         if dx is not None:
@@ -643,7 +651,6 @@ class DCRInversionApp(object):
                     self.survey = self.IO.read_ubc_dc2d_obs_file(
                         fname, 'simple', toponame=toponame
                     )
-
                 self.set_mesh()
                 print (">> {} is loaded".format(fname))
                 print (">> survey type: {}".format(self.IO.survey_type))
@@ -791,6 +798,8 @@ class DCRInversionApp(object):
         dx = widgets.FloatText(value=self.IO.dx)
         dz = widgets.FloatText(value=self.IO.dz)
         corezlength = widgets.FloatText(value=self.IO.corezlength)
+        npad_x = widgets.IntText(value=self.IO.npad_x)
+        npad_z = widgets.IntText(value=self.IO.npad_z)
         i_src = widgets.IntSlider(value=0, min=0, max=self.survey.nSrc-1, step=1)
 
         widgets.interact(
@@ -798,6 +807,8 @@ class DCRInversionApp(object):
                 dx=dx,
                 dz=dz,
                 corezlength=corezlength,
+                npad_x=npad_x,
+                npad_z=npad_z,
                 i_src=i_src
         )
 
