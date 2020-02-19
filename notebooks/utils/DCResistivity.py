@@ -617,11 +617,22 @@ class DCRInversionApp(object):
             ax.plot(self.IO.electrode_locations[:,0], self.IO.electrode_locations[:,1], 'k.')
             src = self.survey.srcList[i_src]
             rx = src.rxList[0]
-            m, n = rx.locs[0], rx.locs[1]
-            ax.plot(src.loc[0][0], src.loc[0][1], 'ro')
-            ax.plot(src.loc[1][0], src.loc[1][1], 'bo')
-            ax.plot(m[:,0],m[:,1],'yo', ms=8)
-            ax.plot(n[:,0],n[:,1],'go', ms=4)
+
+            src_type = self.IO.survey_type .split('-')[0]
+            rx_type = self.IO.survey_type .split('-')[1]
+
+            if src_type == 'dipole':
+                ax.plot(src.loc[0][0], src.loc[0][1], 'ro')
+                ax.plot(src.loc[1][0], src.loc[1][1], 'bo')
+            elif src_type == 'pole':
+                ax.plot(src.loc[0], src.loc[1], 'ro')
+            if rx_type == 'dipole':
+                m, n = rx.locs[0], rx.locs[1]
+                ax.plot(m[:,0],m[:,1],'yo', ms=8)
+                ax.plot(n[:,0],n[:,1],'go', ms=4)
+            elif rx_type == 'pole':
+                m = rx.locs
+                ax.plot(m[:,0],m[:,1],'yo', ms=8)
 
             ax.set_aspect(1)
             ax.set_xlabel("x (m")
@@ -665,17 +676,30 @@ class DCRInversionApp(object):
                 print (">> or the input file format is wrong")
 
     def get_problem(self):
-        actmap = maps.InjectActiveCells(
-            self.mesh, indActive=self.actind, valInactive=np.log(self.sigma_air)
-        )
-        mapping = maps.ExpMap(self.mesh) * actmap
-        problem = DC.simulation_2d.Problem2D_N(
-            self.mesh,
-            sigmaMap=mapping,
-            storeJ=True,
-            Solver=Pardiso,
-            survey=self.survey,
-        )
+        if self.IO.survey_type == 'pole-pole':
+            actmap = maps.InjectActiveCells(
+                self.mesh, indActive=self.actind, valInactive=np.log(self.sigma_air)
+            )
+            mapping = maps.ExpMap(self.mesh) * actmap
+            problem = DC.simulation_2d.Problem2D_CC(
+                self.mesh,
+                sigmaMap=mapping,
+                storeJ=True,
+                Solver=Pardiso,
+                survey=self.survey,
+            )
+        else:
+            actmap = maps.InjectActiveCells(
+                self.mesh, indActive=self.actind, valInactive=np.log(self.sigma_air)
+            )
+            mapping = maps.ExpMap(self.mesh) * actmap
+            problem = DC.simulation_2d.Problem2D_N(
+                self.mesh,
+                sigmaMap=mapping,
+                storeJ=True,
+                Solver=Pardiso,
+                survey=self.survey,
+            )
         return problem
 
     def get_initial_resistivity(self):
