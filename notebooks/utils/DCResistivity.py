@@ -1,5 +1,5 @@
 import numpy as np
-from pymatsolver import Pardiso
+from pymatsolver import Pardiso, BicgJacobi
 from SimPEG import maps, data
 from SimPEG.electromagnetics.static import resistivity as DC
 import pandas as pd
@@ -561,6 +561,7 @@ class DCRInversionApp(object):
     _JtJ = None
     _doi_index = None
     doi = False
+    use_iterative = False
 
 
     def __init__(self):
@@ -683,6 +684,14 @@ class DCRInversionApp(object):
                 print (">> or the input file format is wrong")
 
     def get_problem(self):
+        if self.use_iterative is True:
+            store_J = False
+            solver_type = BicgJacobi
+            solver_type.tol = 1e-3
+        else:
+            store_J = True
+            solver_type = Pardiso
+
         if self.IO.survey_type == 'pole-pole':
             actmap = maps.InjectActiveCells(
                 self.mesh, indActive=self.actind, valInactive=np.log(self.sigma_air)
@@ -691,8 +700,8 @@ class DCRInversionApp(object):
             problem = DC.simulation_2d.Problem2D_CC(
                 self.mesh,
                 sigmaMap=mapping,
-                storeJ=True,
-                Solver=Pardiso,
+                storeJ=store_J,
+                Solver=solver_type,
                 survey=self.survey,
             )
         else:
@@ -703,8 +712,8 @@ class DCRInversionApp(object):
             problem = DC.simulation_2d.Problem2D_N(
                 self.mesh,
                 sigmaMap=mapping,
-                storeJ=True,
-                Solver=Pardiso,
+                storeJ=store_J,
+                Solver=solver_type,
                 survey=self.survey,
             )
         return problem
@@ -741,8 +750,10 @@ class DCRInversionApp(object):
         coolingRate=2,
         rho_upper=np.Inf,
         rho_lower=-np.Inf,
+        use_iterative=False,
         run=True,
     ):
+        self.use_iterative=use_iterative
         if run:
             maxIterCG=20
             self.problem = self.get_problem()
@@ -1517,6 +1528,9 @@ class DCRInversionApp(object):
             value=1, continuous_update=False,
             description="$\\alpha_{z}$"
         )
+        use_iterative = widgets.Checkbox(
+            value=False, continuous_update=False, description="use iterative solver"
+        )
 
         widgets.interact(
             self.run_inversion,
@@ -1533,7 +1547,8 @@ class DCRInversionApp(object):
             coolingRate=coolingRate,
             alpha_s=alpha_s,
             alpha_x=alpha_x,
-            alpha_z=alpha_z
+            alpha_z=alpha_z,
+            use_iterative=use_iterative
         )
 
     def interact_plot_inversion_results(self):
