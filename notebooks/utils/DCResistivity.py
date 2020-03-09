@@ -24,6 +24,7 @@ from scipy.interpolate import interp1d
 from scipy.spatial import Delaunay
 
 from discretize import TensorMesh
+from discretize.utils import meshutils
 
 
 def in_hull(p, hull):
@@ -548,6 +549,7 @@ class DCRInversionApp(object):
 
     uncertainty = None
     mesh = None
+    mesh_core = None
     actind = None
     IO = None
     survey = None
@@ -577,10 +579,17 @@ class DCRInversionApp(object):
     @property
     def JtJ(self):
         if self._JtJ is None:
-            self._JtJ = np.sqrt((self.Jmatrix ** 2).sum(axis=0))
+            self._JtJ = np.sqrt((self.Jmatrix ** 2).sum(axis=0)) / self.mesh.vol
         return self._JtJ
 
-    def set_mesh(self, dx=None, dz=None, corezlength=None, npad_x=10, npad_z=10, i_src=None):
+    @property
+    def P(self):
+        if self._P is None:
+            self._P = self.mesh.getInterpolationMat(self.mesh_core.gridCC, locType='CC')
+        return self._P
+
+    def set_mesh(self, dx=None, dz=None, corezlength=None, show_core=None):
+    # (self, dx=None, dz=None, corezlength=None, npad_x=10, npad_z=10, i_src=None):
 
         sort_ind = np.argsort(self.IO.electrode_locations[:,0])
         if self.topo is None:
@@ -600,11 +609,11 @@ class DCRInversionApp(object):
         if corezlength == 'None':
             corezlength = None
 
-        if npad_x == 'None':
-            npad_x = 10
+        # if npad_x == 'None':
+        #     npad_x = 10
 
-        if npad_z == 'None':
-            npad_z = 10
+        # if npad_z == 'None':
+        #     npad_z = 10
 
         self.mesh, self.actind = self.IO.set_mesh(
             topo=topo,
@@ -612,8 +621,7 @@ class DCRInversionApp(object):
             dx=dx,
             dz=dz,
             corezlength=corezlength,
-            npad_x=npad_x,
-            npad_z=npad_z
+            mesh_type='TREE'
         )
 
         if dx is not None:
@@ -624,29 +632,33 @@ class DCRInversionApp(object):
             )
 
             ax.plot(self.IO.electrode_locations[:,0], self.IO.electrode_locations[:,1], 'k.')
-            src = self.survey.srcList[i_src]
-            rx = src.rxList[0]
+            # src = self.survey.srcList[i_src]
+            # rx = src.rxList[0]
 
-            src_type = self.IO.survey_type .split('-')[0]
-            rx_type = self.IO.survey_type .split('-')[1]
+            # src_type = self.IO.survey_type .split('-')[0]
+            # rx_type = self.IO.survey_type .split('-')[1]
 
-            if src_type == 'dipole':
-                ax.plot(src.loc[0][0], src.loc[0][1], 'ro')
-                ax.plot(src.loc[1][0], src.loc[1][1], 'bo')
-            elif src_type == 'pole':
-                ax.plot(src.loc[0], src.loc[1], 'ro')
-            if rx_type == 'dipole':
-                m, n = rx.locs[0], rx.locs[1]
-                ax.plot(m[:,0],m[:,1],'yo', ms=8)
-                ax.plot(n[:,0],n[:,1],'go', ms=4)
-            elif rx_type == 'pole':
-                m = rx.locs
-                ax.plot(m[:,0],m[:,1],'yo', ms=8)
+            # if src_type == 'dipole':
+            #     ax.plot(src.loc[0][0], src.loc[0][1], 'ro')
+            #     ax.plot(src.loc[1][0], src.loc[1][1], 'bo')
+            # elif src_type == 'pole':
+            #     ax.plot(src.loc[0], src.loc[1], 'ro')
+            # if rx_type == 'dipole':
+            #     m, n = rx.locs[0], rx.locs[1]
+            #     ax.plot(m[:,0],m[:,1],'yo', ms=8)
+            #     ax.plot(n[:,0],n[:,1],'go', ms=4)
+            # elif rx_type == 'pole':
+            #     m = rx.locs
+            #     ax.plot(m[:,0],m[:,1],'yo', ms=8)
 
             ax.set_aspect(1)
             ax.set_xlabel("x (m")
             ax.set_ylabel("z (m")
-            ax.set_ylim(self.mesh.vectorNy.min(), self.mesh.vectorNy.max() + 10)
+            if show_core:
+                ax.set_xlim(self.IO.xyzlim[0,:])
+                ax.set_ylim(self.IO.xyzlim[1,:])
+            else:
+                ax.set_ylim(self.mesh.vectorNy.min(), self.mesh.vectorNy.max() + 10)
 
     def load_obs(self, fname, topo_name, load, input_type):
         if load:
@@ -664,16 +676,17 @@ class DCRInversionApp(object):
                         fname, 'simple', toponame=toponame
                     )
                 self.set_mesh()
+                _, self.mesh_core = meshutils.ExtractCoreMesh(self.IO.xyzlim, self.mesh)
                 print (">> {} is loaded".format(fname))
                 print (">> survey type: {}".format(self.IO.survey_type))
                 print ("   # of data: {0}".format(self.survey.nD))
                 rho_0 = self.get_initial_resistivity()
                 print ((">> suggested initial resistivity: %1.f ohm-m")%(rho_0))
-                print (">> 2D tensor mesh is set.")
-                print ("   # of cells: {0}".format(self.mesh.nC))
-                print ("   # of active cells: {0}".format(self.actind.sum()))
+                # print (">> 2D tensor mesh is set.")
+                # print ("   # of cells: {0}".format(self.mesh.nC))
+                # print ("   # of active cells: {0}".format(self.actind.sum()))
                 print(
-                    "   size of 2D cells (hx, hy) = (%1.f m, %1.f m)"
+                    ">> size of suggested 2D cells (hx, hy) = (%1.f m, %1.f m)"
                     % (self.mesh.hx.min(), self.mesh.hy.min())
                 )
                 print ((">> estimated core depth is : %.1f m") % (self.IO.corezlength))
@@ -684,13 +697,13 @@ class DCRInversionApp(object):
                 print (">> or the input file format is wrong")
 
     def get_problem(self):
-        if self.use_iterative is True:
-            store_J = False
-            solver_type = BicgJacobi
-            solver_type.tol = 1e-3
-        else:
-            store_J = True
-            solver_type = Pardiso
+        # if self.use_iterative is True:
+        #     store_J = False
+        #     solver_type = BicgJacobi
+        #     solver_type.tol = 1e-3
+        # else:
+        store_J = True
+        solver_type = Pardiso
 
         if self.IO.survey_type == 'pole-pole':
             actmap = maps.InjectActiveCells(
@@ -833,18 +846,23 @@ class DCRInversionApp(object):
         dx = widgets.FloatText(value=self.IO.dx)
         dz = widgets.FloatText(value=self.IO.dz)
         corezlength = widgets.FloatText(value=self.IO.corezlength)
-        npad_x = widgets.IntText(value=self.IO.npad_x)
-        npad_z = widgets.IntText(value=self.IO.npad_z)
-        i_src = widgets.IntSlider(value=0, min=0, max=self.survey.nSrc-1, step=1)
+        # npad_x = widgets.IntText(value=self.IO.npad_x)
+        # npad_z = widgets.IntText(value=self.IO.npad_z)
+        # i_src = widgets.IntSlider(value=0, min=0, max=self.survey.nSrc-1, step=1)
+        show_core = widgets.Checkbox(
+                value=True, description="show core?", disabled=False
+        )
+
 
         widgets.interact(
             self.set_mesh,
                 dx=dx,
                 dz=dz,
                 corezlength=corezlength,
-                npad_x=npad_x,
-                npad_z=npad_z,
-                i_src=i_src
+                show_core=show_core
+                # npad_x=npad_x,
+                # npad_z=npad_z,
+                # i_src=i_src
         )
 
     def interact_load_obs(self):
@@ -991,7 +1009,7 @@ class DCRInversionApp(object):
             vmin, vmax = tmp[self.actind].min(), tmp[self.actind].max()
         else:
             vmin, vmax = np.log10(clim[0]), np.log10(clim[1])
-        
+
         if reverse_color==True:
             cmap_type='jet_r'
         else:
@@ -1270,6 +1288,8 @@ class DCRInversionApp(object):
         if show_core:
             ymin, ymax = self.IO.xyzlim[1, :]
             xmin, xmax = self.IO.xyzlim[0, :]
+            print (xmin, xmax)
+            print (ymin, ymax)
             dy = (ymax - ymin) / 10.0
             ax.set_ylim(ymin, ymax + dy)
             ax.set_xlim(xmin, xmax)
@@ -1517,7 +1537,7 @@ class DCRInversionApp(object):
             description='n_iter / beta'
         )
         alpha_s=widgets.FloatText(
-            value=0.1, continuous_update=False,
+            value=1e-2, continuous_update=False,
             description="$\\alpha_{s}$"
         )
         alpha_x=widgets.FloatText(
@@ -1528,9 +1548,9 @@ class DCRInversionApp(object):
             value=1, continuous_update=False,
             description="$\\alpha_{z}$"
         )
-        use_iterative = widgets.Checkbox(
-            value=False, continuous_update=False, description="use iterative solver"
-        )
+        # use_iterative = widgets.Checkbox(
+        #     value=False, continuous_update=False, description="use iterative solver"
+        # )
 
         widgets.interact(
             self.run_inversion,
@@ -1548,7 +1568,7 @@ class DCRInversionApp(object):
             alpha_s=alpha_s,
             alpha_x=alpha_x,
             alpha_z=alpha_z,
-            use_iterative=use_iterative
+            # use_iterative=use_iterative
         )
 
     def interact_plot_inversion_results(self):
