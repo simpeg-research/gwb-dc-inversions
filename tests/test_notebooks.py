@@ -12,11 +12,11 @@ NBDIR = os.path.sep.join(
 
 
 IGNORE = [
-    "DC-1d-parametric-inversion",
-    "DC-1d-smooth-inversion",
-    "DC-1d-sounding",
-    "DC-plot-sounding-data",
-    "DC-2d-sounding"
+    "DC-1d-parametric-inversion-code",
+    "DC-1d-smooth-inversion-code",
+    "DC-1d-sounding-code",
+    "DC-plot-sounding-data-code",
+    "DC-2d-sounding-code"
 ]
 
 Test = testipynb.TestNotebooks(directory=NBDIR, timeout=2800)
