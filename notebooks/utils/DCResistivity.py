@@ -588,7 +588,7 @@ class DCRInversionApp(object):
             self._P = self.mesh.getInterpolationMat(self.mesh_core.gridCC, locType='CC')
         return self._P
 
-    def set_mesh(self, dx=None, dz=None, corezlength=None, show_core=None):
+    def set_mesh(self, dx=None, dz=None, corezlength=None, show_core=None, npad_x=10, npad_z=10, mesh_type='TensorMesh'):
     # (self, dx=None, dz=None, corezlength=None, npad_x=10, npad_z=10, i_src=None):
 
         sort_ind = np.argsort(self.IO.electrode_locations[:,0])
@@ -620,8 +620,10 @@ class DCRInversionApp(object):
             method='linear',
             dx=dx,
             dz=dz,
+            npad_x=npad_x,
+            npad_z=npad_z,
             corezlength=corezlength,
-            mesh_type='TREE'
+            mesh_type=mesh_type
         )
 
         if dx is not None:
@@ -763,10 +765,10 @@ class DCRInversionApp(object):
         coolingRate=2,
         rho_upper=np.Inf,
         rho_lower=-np.Inf,
-        use_iterative=False,
+        # use_iterative=False,
         run=True,
     ):
-        self.use_iterative=use_iterative
+        # self.use_iterative=use_iterative
         if run:
             maxIterCG=20
             self.problem = self.get_problem()
@@ -846,22 +848,25 @@ class DCRInversionApp(object):
         dx = widgets.FloatText(value=self.IO.dx)
         dz = widgets.FloatText(value=self.IO.dz)
         corezlength = widgets.FloatText(value=self.IO.corezlength)
-        # npad_x = widgets.IntText(value=self.IO.npad_x)
-        # npad_z = widgets.IntText(value=self.IO.npad_z)
+        npad_x = widgets.IntSlider(value=self.IO.npad_x, min=1, max=30)
+        npad_z = widgets.IntSlider(value=self.IO.npad_z, min=1, max=30)
         # i_src = widgets.IntSlider(value=0, min=0, max=self.survey.nSrc-1, step=1)
         show_core = widgets.Checkbox(
                 value=True, description="show core?", disabled=False
         )
 
-
+        mesh_type = widgets.ToggleButtons(
+            value='TensorMesh', options=['TensorMesh', 'TREE']
+        )
         widgets.interact(
             self.set_mesh,
                 dx=dx,
                 dz=dz,
                 corezlength=corezlength,
-                show_core=show_core
-                # npad_x=npad_x,
-                # npad_z=npad_z,
+                show_core=show_core,
+                npad_x=npad_x,
+                npad_z=npad_z,
+                mesh_type=mesh_type,
                 # i_src=i_src
         )
 
@@ -1251,23 +1256,28 @@ class DCRInversionApp(object):
             ax=ax,
             gridOpts={"color": "white", "alpha": 0.5},
         )
+
         tmp_contour = np.ones(self.mesh.nC) * np.nan
         tmp_contour[self.actind] = doi_index
         tmp_contour = np.ma.masked_array(tmp_contour, ~self.actind)
 
-        cs = ax.contour(
-            self.mesh.vectorCCx,
-            self.mesh.vectorCCy,
-            tmp_contour.reshape(self.mesh.vnC, order="F").T,
-            levels=[level],
-            colors="k",
-        )
-        ax.clabel(cs, fmt="%.1f", colors="k", fontsize=12)  # contour line labels
+        if self.mesh._meshType == 'TREE':
+            print (">> setting doi_level only works when mesh type is TensorMesh")
+        else:
+            cs = ax.contour(
+                self.mesh.vectorCCx,
+                self.mesh.vectorCCy,
+                tmp_contour.reshape(self.mesh.vnC, order="F").T,
+                levels=[level],
+                colors="k",
+            )
+            ax.clabel(cs, fmt="%.1f", colors="k", fontsize=12)  # contour line labels
 
-        contours = get_contour_verts(cs)
-        pts = np.vstack(contours[0])
-        self.doi_index = doi_index
-        self.doi_inds = ~in_hull(self.mesh.gridCC, pts)
+            contours = get_contour_verts(cs)
+            pts = np.vstack(contours[0])
+            self.doi_index = doi_index
+            self.doi_inds = ~in_hull(self.mesh.gridCC, pts)
+
 
         ticks = np.linspace(vmin, vmax, 3)
 
@@ -1275,6 +1285,7 @@ class DCRInversionApp(object):
             out[0], orientation="vertical", fraction=0.008, ticks=ticks, ax=ax
         )
         cb.set_ticklabels([("%.1f") % (tick) for tick in ticks])
+
 
         ax.plot(
             self.IO.electrode_locations[:, 0],
@@ -1288,8 +1299,6 @@ class DCRInversionApp(object):
         if show_core:
             ymin, ymax = self.IO.xyzlim[1, :]
             xmin, xmax = self.IO.xyzlim[0, :]
-            print (xmin, xmax)
-            print (ymin, ymax)
             dy = (ymax - ymin) / 10.0
             ax.set_ylim(ymin, ymax + dy)
             ax.set_xlim(xmin, xmax)
@@ -1977,7 +1986,7 @@ class DC1DInversionApp(object):
         if self.mesh_1d is None:
             self.set_mesh(2, 25, 1.1, plotit=False)
         mapping = maps.ExpMap(self.mesh_1d)
-        simulation = DC.DCSimulation_1D(
+        simulation = DC.Simulation1DLayers(
             rhoMap=mapping,
             thicknesses=self.mesh_1d.hx[:-1],
             Solver=Pardiso,
