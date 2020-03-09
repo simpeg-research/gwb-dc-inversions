@@ -298,7 +298,7 @@ class LinearInversionDirectApp(object):
         reg = regularization.Tikhonov(
             self.mesh, alpha_s=alpha_s, alpha_x=alpha_x, mref=mref
         )
-        dmis = data_misfit.l2_DataMisfit(data=lin_data, simulation=simulation)
+        dmis = data_misfit.L2DataMisfit(data=lin_data, simulation=simulation)
         dmis.W = 1.0 / self.uncertainty
 
         betas = np.logspace(np.log10(beta_min), np.log10(beta_max), n_beta)[::-1]

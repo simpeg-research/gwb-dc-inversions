@@ -1671,14 +1671,14 @@ class DC1D3LayerApp(object):
         mapping_rho = maps.ExpMap(nP=rho.size) * wires.rho
         mapping_t = maps.ExpMap(nP=rho.size-1) * wires.t
         # mapping_t = wires.t
-        simulation = DC.DCSimulation_1D(
+        simulation = DC.Simulation1DLayers(
             rhoMap=mapping_rho,
             thicknessesMap=mapping_t,
             survey=self.data.survey,
             data_type='apparent_resistivity'
         )
         m = np.log(np.r_[rho, hz])
-        data_tmp = simulation.makeSyntheticData(m)
+        data_tmp = simulation.make_synthetic_data(m)
         ab = simulation.electrode_separations['AB']
         return ab, data_tmp
 
@@ -1773,7 +1773,7 @@ class DC1D3LayerApp(object):
         wires = maps.Wires(('rho', n_layer), ('t', n_layer-1))
         mapping_rho = maps.ExpMap(nP=n_layer) * wires.rho
         mapping_t = maps.ExpMap(nP=n_layer-1) * wires.t
-        simulation = DC.DCSimulation_1D(
+        simulation = DC.Simulation1DLayers(
             rhoMap=mapping_rho,
             thicknessesMap=mapping_t,
             survey=self.data.survey,

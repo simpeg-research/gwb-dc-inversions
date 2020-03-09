@@ -15,7 +15,7 @@ IGNORE = [
     "DC-1d-parametric-inversion-code",
     "DC-1d-smooth-inversion-code",
     "DC-1d-sounding-code",
-    "DC-plot-sounding-data-code",
+    "DC-plot-sounding-data",
     "DC-2d-sounding-code"
 ]
 

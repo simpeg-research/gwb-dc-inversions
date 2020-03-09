@@ -88,22 +88,22 @@ def model_soundings(h0, h1, rho0, rho1, rho2):
     mapping_t = maps.IdentityMap(nP=hz.size) * wires.t
 
     survey = DC.Survey(srcList_w)
-    simulation = DC.DCSimulation_1D(
+    simulation = DC.Simulation1DLayers(
         rhoMap=mapping_rho,
         thicknessesMap=mapping_t,
         survey=survey,
         data_type='apparent_resistivity'
     )
-    data_w = simulation.makeSyntheticData(m)
+    data_w = simulation.make_synthetic_data(m)
 
     survey = DC.Survey(srcList_s)
-    simulation = DC.DCSimulation_1D(
+    simulation = DC.Simulation1DLayers(
         rhoMap=mapping_rho,
         thicknessesMap=mapping_t,
         survey=survey,
         data_type='apparent_resistivity'
     )
-    data_s = simulation.makeSyntheticData(m)
+    data_s = simulation.make_synthetic_data(m)
     return data_w, data_s
 
 
