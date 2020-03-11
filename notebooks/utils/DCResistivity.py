@@ -625,10 +625,10 @@ class DCRInversionApp(object):
             corezlength=corezlength,
             mesh_type=mesh_type
         )
-        print(f'Total cells in mesh : {self.mesh.nC}')
-        print(f'Active cells in mesh : {np.sum(self.actind)}')
 
         if dx is not None:
+            print(f'Total cells in mesh : {self.mesh.nC}')
+            print(f'Active cells in mesh : {np.sum(self.actind)}')
             fig, ax = plt.subplots(1,1, figsize=(10, 5))
             self.mesh.plotImage(
                 self.actind, grid=True, ax=ax,
