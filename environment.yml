@@ -16,5 +16,5 @@ dependencies:
   - sparse
   - discretize
   - pip:
-    - git+https://github.com/simpeg/simpeg.git@simulation_DC2.5DSpeedup
+    - git+https://github.com/simpeg/simpeg.git@simulation
     - empymod
