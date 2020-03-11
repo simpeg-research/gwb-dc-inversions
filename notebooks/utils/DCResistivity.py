@@ -709,27 +709,29 @@ class DCRInversionApp(object):
 
         if self.IO.survey_type == 'pole-pole':
             actmap = maps.InjectActiveCells(
-                self.mesh, indActive=self.actind, valInactive=np.log(self.sigma_air)
+                self.mesh, indActive=self.actind, valInactive=np.log(self.sigma_air),
             )
             mapping = maps.ExpMap(self.mesh) * actmap
-            problem = DC.simulation_2d.Problem2D_CC(
+            problem = DC.Simulation2DCellCentered(
                 self.mesh,
                 sigmaMap=mapping,
                 storeJ=store_J,
                 Solver=solver_type,
                 survey=self.survey,
+                miniaturize=True
             )
         else:
             actmap = maps.InjectActiveCells(
-                self.mesh, indActive=self.actind, valInactive=np.log(self.sigma_air)
+                self.mesh, indActive=self.actind, valInactive=np.log(self.sigma_air),
             )
             mapping = maps.ExpMap(self.mesh) * actmap
-            problem = DC.simulation_2d.Problem2D_N(
+            problem = DC.Simulation2DNodal(
                 self.mesh,
                 sigmaMap=mapping,
                 storeJ=store_J,
                 Solver=solver_type,
                 survey=self.survey,
+                miniaturize=True
             )
         return problem
 
