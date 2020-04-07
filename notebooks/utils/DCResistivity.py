@@ -20,7 +20,7 @@ matplotlib.rcParams['font.size'] = 14
 
 from ipywidgets import GridspecLayout, widgets
 import os
-from scipy.interpolate import interp1d
+from scipy.interpolate import interp1d, griddata
 from scipy.spatial import Delaunay
 
 from discretize import TensorMesh
@@ -1265,23 +1265,23 @@ class DCRInversionApp(object):
         tmp_contour[self.actind] = doi_index
         tmp_contour = np.ma.masked_array(tmp_contour, ~self.actind)
 
+        self.doi_inds = tmp_contour >= level
+        self.doi_index = doi_index
+
         if self.mesh._meshType == 'TREE':
-            print (">> setting doi_level only works when mesh type is TensorMesh")
+            contour_mesh = TensorMesh(self.mesh.h, self.mesh.x0)
+            tmp_contour = griddata(self.mesh.gridCC, tmp_contour, contour_mesh.gridCC)
         else:
-            cs = ax.contour(
-                self.mesh.vectorCCx,
-                self.mesh.vectorCCy,
-                tmp_contour.reshape(self.mesh.vnC, order="F").T,
-                levels=[level],
-                colors="k",
-            )
-            ax.clabel(cs, fmt="%.1f", colors="k", fontsize=12)  # contour line labels
+            contour_mesh = self.mesh
 
-            contours = get_contour_verts(cs)
-            pts = np.vstack(contours[0])
-            self.doi_index = doi_index
-            self.doi_inds = ~in_hull(self.mesh.gridCC, pts)
-
+        cs = ax.contour(
+            contour_mesh.vectorCCx,
+            contour_mesh.vectorCCy,
+            tmp_contour.reshape(contour_mesh.vnC, order="F").T,
+            levels=[level],
+            colors="k",
+        )
+        ax.clabel(cs, fmt="%.1f", colors="k", fontsize=12)  # contour line labels
 
         ticks = np.linspace(vmin, vmax, 3)
 
