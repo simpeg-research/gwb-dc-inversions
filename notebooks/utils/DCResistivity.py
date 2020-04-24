@@ -588,7 +588,7 @@ class DCRInversionApp(object):
             self._P = self.mesh.getInterpolationMat(self.mesh_core.gridCC, locType='CC')
         return self._P
 
-    def set_mesh(self, dx=None, dz=None, corezlength=None, show_core=None, npad_x=10, npad_z=10, mesh_type='TensorMesh'):
+    def set_mesh(self, dx=None, dz=None, corezlength=None, show_core=None, xpad=None, zpad=None, mesh_type='TensorMesh'):
     # (self, dx=None, dz=None, corezlength=None, npad_x=10, npad_z=10, i_src=None):
 
         sort_ind = np.argsort(self.IO.electrode_locations[:,0])
@@ -600,14 +600,26 @@ class DCRInversionApp(object):
         tmp_z = np.r_[topo_tmp[0,1], topo_tmp[:,1], topo_tmp[-1,1]]
         topo = np.c_[tmp_x, tmp_z]
 
-        if dx == 'None':
-            dx = None
+        npad_x = 0
+        val = 0.
+        while val < xpad/self.IO.dx:
+            npad_x = npad_x + 1
+            val = val + 1.3**npad_x
 
-        if dz == 'None':
-            dz = None
+        npad_z = 0
+        val = 0.
+        while val < zpad/self.IO.dz:
+            npad_z = npad_z + 1
+            val = val + 1.3**npad_z
 
-        if corezlength == 'None':
-            corezlength = None
+        # if dx == 'None':
+        #     dx = None
+
+        # if dz == 'None':
+        #     dz = None
+
+        # if corezlength == 'None':
+        #     corezlength = None
 
         # if npad_x == 'None':
         #     npad_x = 10
@@ -679,8 +691,8 @@ class DCRInversionApp(object):
                     self.survey = self.IO.read_ubc_dc2d_obs_file(
                         fname, 'simple', toponame=toponame
                     )
-                self.set_mesh()
-                _, self.mesh_core = meshutils.ExtractCoreMesh(self.IO.xyzlim, self.mesh)
+                # self.set_mesh()
+                # _, self.mesh_core = meshutils.ExtractCoreMesh(self.IO.xyzlim, self.mesh)
                 print (">> {} is loaded".format(fname))
                 print (">> survey type: {}".format(self.IO.survey_type))
                 print ("   # of data: {0}".format(self.survey.nD))
@@ -689,11 +701,11 @@ class DCRInversionApp(object):
                 # print (">> 2D tensor mesh is set.")
                 # print ("   # of cells: {0}".format(self.mesh.nC))
                 # print ("   # of active cells: {0}".format(self.actind.sum()))
-                print(
-                    ">> size of suggested 2D cells (hx, hy) = (%1.f m, %1.f m)"
-                    % (self.mesh.hx.min(), self.mesh.hy.min())
-                )
-                print ((">> estimated core depth is : %.1f m") % (self.IO.corezlength))
+                # print(
+                #     ">> size of suggested 2D cells (hx, hz) = (%1.f m, %1.f m)"
+                #     % (self.mesh.hx.min(), self.mesh.hz.min())
+                # )
+                # print ((">> estimated core depth is : %.1f m") % (self.IO.corezlength))
 
             except:
                 print (">> Reading input file is failed!")
@@ -849,27 +861,51 @@ class DCRInversionApp(object):
             pass
 
     def interact_set_mesh(self):
-        dx = widgets.FloatText(value=self.IO.dx)
-        dz = widgets.FloatText(value=self.IO.dz)
-        corezlength = widgets.FloatText(value=self.IO.corezlength)
-        npad_x = widgets.IntSlider(value=self.IO.npad_x, min=1, max=30)
-        npad_z = widgets.IntSlider(value=self.IO.npad_z, min=1, max=30)
+        self.IO.set_mesh()
+        dx = widgets.FloatText(value=self.IO.dx, min=0.1, max=100.)
+        dz = widgets.FloatText(value=self.IO.dz, min=0.1, max=100.)
+        corezlength = widgets.FloatText(value=self.IO.corezlength, min=0.1)
+        xpad = widgets.FloatText(value=2*self.IO.corezlength, min=0., max=10000.)
+        zpad = widgets.FloatText(value=2*self.IO.corezlength, min=0., max=10000.)
+
+        # npad_x = widgets.IntSlider(value=self.IO.npad_x, min=1, max=30)
+        # npad_z = widgets.IntSlider(value=self.IO.npad_z, min=1, max=30)
+
+        npad_x = 1
+        val = 1.3
+        while val < 2*self.IO.corezlength/self.IO.dx:
+            npad_x = npad_x + 1
+            val = val + 1.3**npad_x
+
+        npad_z = 1
+        val = 1.3
+        while val < 2*self.IO.corezlength/self.IO.dz:
+            npad_z = npad_z + 1
+            val = val + 1.3**npad_z
+
         # i_src = widgets.IntSlider(value=0, min=0, max=self.survey.nSrc-1, step=1)
         show_core = widgets.Checkbox(
-                value=True, description="show core?", disabled=False
+                value=True, description="show core region only", disabled=False
         )
 
         mesh_type = widgets.ToggleButtons(
             value='TensorMesh', options=['TensorMesh', 'TREE']
         )
+
+        print(">> suggested dx: {} m".format(self.IO.dx))
+        print(">> suggested dz: {} m".format(self.IO.dz))
+        print(">> suggested x padding: {} m".format(2*self.IO.corezlength))
+        print(">> suggested z padding: {} m".format(2*self.IO.corezlength))
+        print(">> suggested corezlength: {} m".format(self.IO.corezlength))
+
         widgets.interact(
             self.set_mesh,
                 dx=dx,
                 dz=dz,
                 corezlength=corezlength,
                 show_core=show_core,
-                npad_x=npad_x,
-                npad_z=npad_z,
+                xpad=xpad,
+                zpad=zpad,
                 mesh_type=mesh_type,
                 # i_src=i_src
         )
