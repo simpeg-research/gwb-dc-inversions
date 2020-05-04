@@ -753,7 +753,8 @@ class DCRInversionApp(object):
         out = np.histogram(np.log10(abs(self.IO.voltages/self.IO.G)))
         return 10**out[1][np.argmax(out[0])]
 
-    def set_uncertainty(self, percentage, floor, set_value=True):
+
+    def set_uncertainty(self, percentage, floor, choice, set_value=True):
         self.percentage = percentage
         self.floor = floor
 
@@ -765,6 +766,24 @@ class DCRInversionApp(object):
             print (">> uncertainty in the observation file is used")
         if np.any(self.uncertainty==0.):
             print ("warning: uncertainty includse zero values!")
+
+        fig, ax = plt.subplots(1, 1, figsize=(12, 7))
+        
+        dobs_sorted = np.sort(np.abs(self.survey.dobs))
+        dunc_sorted = dobs_sorted * percentage / 100.+ floor
+        x = np.linspace(1, len(dobs_sorted), len(dobs_sorted))
+        if choice == 'linear':
+        	ax.plot(x, dobs_sorted-dunc_sorted, 'k:', x, dobs_sorted+dunc_sorted, 'k:')
+        	ax.fill_between(x, dobs_sorted-dunc_sorted, dobs_sorted+dunc_sorted, facecolor=[0.7, 0.7, 0.7], interpolate=True)
+        	ax.plot(x, dobs_sorted, 'k', lw=2)
+        else:
+        	ax.semilogx(x, dobs_sorted-dunc_sorted, 'k:', x, dobs_sorted+dunc_sorted, 'k:')
+        	ax.fill_between(x, dobs_sorted-dunc_sorted, dobs_sorted+dunc_sorted, facecolor=[0.7, 0.7, 0.7], interpolate=True)
+        	ax.semilogy(x, dobs_sorted, 'k', lw=2)
+
+        ax.set_xlabel("Datum")
+        ax.set_ylabel("Volts")
+        ax.set_title("Data and uncertainties sorted by absolute value")
 
 
     def run_inversion(
@@ -1553,10 +1572,17 @@ class DCRInversionApp(object):
     def interact_set_uncertainty(self):
         percentage = widgets.FloatText(value=5.)
         floor = widgets.FloatText(value=0.)
+        choice = widgets.RadioButtons(
+        	options=['linear', 'log'],
+        	value='linear',
+    		description='Plotting Scale:',
+    		disabled=False
+    	)
         widgets.interact(
             self.set_uncertainty,
             percentage=percentage,
-            floor=floor
+            floor=floor,
+            choice=choice
         )
 
     def interact_run_inversion(self):
