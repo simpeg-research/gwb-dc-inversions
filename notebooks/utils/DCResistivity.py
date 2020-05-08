@@ -770,7 +770,8 @@ class DCRInversionApp(object):
         fig, ax = plt.subplots(1, 1, figsize=(12, 7))
         
         dobs_sorted = np.sort(np.abs(self.survey.dobs))
-        dunc_sorted = dobs_sorted * percentage / 100.+ floor
+        k = np.argsort(np.abs(self.survey.dobs))
+        dunc_sorted = self.uncertainty[k]
         x = np.linspace(1, len(dobs_sorted), len(dobs_sorted))
         if choice == 'linear':
         	ax.plot(x, dobs_sorted-dunc_sorted, 'k:', x, dobs_sorted+dunc_sorted, 'k:')
