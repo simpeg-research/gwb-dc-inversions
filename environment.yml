@@ -10,11 +10,6 @@ dependencies:
   - Pillow
   - ipywidgets>=0.6.0
   - requests
-  - mkl
-  - dask
-  - zarr
-  - sparse
   - discretize
+  - pymatsolver >=0.1.1
   - simpeg>=0.14.0
-  - pip:
-    - empymod
