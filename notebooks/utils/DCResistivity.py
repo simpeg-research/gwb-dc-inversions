@@ -1190,6 +1190,11 @@ class DCRInversionApp(object):
         rho1[~self.actind] = np.nan
         rho2[~self.actind] = np.nan
 
+        if reverse_color:
+            cmap = "jet_r"
+        else:
+            cmap = "jet"
+
         if scale == "log":
             vmin, vmax = np.log10(vmin), np.log10(vmax)
 
@@ -1201,7 +1206,7 @@ class DCRInversionApp(object):
             rho1,
             grid=show_grid,
             clim=(vmin, vmax),
-            pcolorOpts={"cmap": "jet"},
+            pcolorOpts={"cmap": cmap},
             ax=ax1,
             gridOpts={"color": "white", "alpha": 0.5},
         )
@@ -1209,7 +1214,7 @@ class DCRInversionApp(object):
             rho2,
             grid=show_grid,
             clim=(vmin, vmax),
-            pcolorOpts={"cmap": "jet"},
+            pcolorOpts={"cmap": cmap},
             ax=ax2,
             gridOpts={"color": "white", "alpha": 0.5},
         )
@@ -1259,6 +1264,7 @@ class DCRInversionApp(object):
         k=100,
         power=2,
         aspect_ratio=1,
+        reverse_color=False
     ):
 
         m1 = self.m[-1]
@@ -1275,13 +1281,18 @@ class DCRInversionApp(object):
         tmp = np.ones(self.mesh.nC) * np.nan
         tmp[self.actind] = doi_index
 
+        if reverse_color:
+            cmap = "jet_r"
+        else:
+            cmap = "jet"
+
         fig, ax = plt.subplots(1, 1, figsize=(10, 5))
 
         out = self.mesh.plotImage(
             tmp,
             grid=show_grid,
             clim=(vmin, vmax),
-            pcolorOpts={"cmap": "jet"},
+            pcolorOpts={"cmap": cmap},
             ax=ax,
             gridOpts={"color": "white", "alpha": 0.5},
         )
@@ -1404,7 +1415,6 @@ class DCRInversionApp(object):
             rho1,
             grid=show_grid,
             clim=(vmin, vmax),
-            pcolorOpts={"cmap": "jet"},
             pcolorOpts={"cmap": cmap},
             ax=ax,
             gridOpts={"color": "white", "alpha": 0.5},
