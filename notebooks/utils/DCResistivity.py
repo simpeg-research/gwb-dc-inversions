@@ -1174,6 +1174,7 @@ class DCRInversionApp(object):
         show_grid=False,
         scale="log",
         aspect_ratio=1,
+        reverse_color=False,
     ):
 
         m1 = self.m[-1]
@@ -1378,6 +1379,7 @@ class DCRInversionApp(object):
         show_grid=False,
         scale="log",
         aspect_ratio=1,
+        reverse_color=False,
     ):
         problem = self.get_problem()
         if scale == "log":
@@ -1393,11 +1395,17 @@ class DCRInversionApp(object):
 
         fig, ax = plt.subplots(1, 1, figsize=(10, 5))
 
+        if reverse_color:
+            cmap = "jet_r"
+        else:
+            cmap = "jet"
+
         out = self.mesh.plotImage(
             rho1,
             grid=show_grid,
             clim=(vmin, vmax),
             pcolorOpts={"cmap": "jet"},
+            pcolorOpts={"cmap": cmap},
             ax=ax,
             gridOpts={"color": "white", "alpha": 0.5},
         )
@@ -1439,13 +1447,14 @@ class DCRInversionApp(object):
     def plot_doi_results(
         self,
         plot_type="models",
+        scale="log",
         rho_min=100,
         rho_max=1000,
         doi_level=0.3,
-        scale="log",
+        aspect_ratio=1,
         show_grid=False,
         show_core=True,
-        aspect_ratio=1,
+        reverse_color=False,
     ):
         try:
             if plot_type == "models":
@@ -1456,6 +1465,7 @@ class DCRInversionApp(object):
                     show_grid=show_grid,
                     scale=scale,
                     aspect_ratio=aspect_ratio,
+                    reverse_color=reverse_color,
                 )
             elif plot_type == "doi":
                 self.plot_doi_index(
@@ -1474,6 +1484,7 @@ class DCRInversionApp(object):
                     show_grid=show_grid,
                     scale=scale,
                     aspect_ratio=aspect_ratio,
+                    reverse_color=reverse_color,
                 )
             else:
                 raise NotImplementedError()
@@ -1530,6 +1541,9 @@ class DCRInversionApp(object):
             show_core = widgets.Checkbox(
                 value=True, description="show core?", disabled=False
             )
+            reverse_color = widgets.Checkbox(
+                value=False, description="reverse colormap on model plot?", disabled=False
+            )
 
             doi_level = widgets.FloatText(value=0.3)
 
@@ -1543,6 +1557,7 @@ class DCRInversionApp(object):
                 doi_level=doi_level,
                 show_grid=show_grid,
                 show_core=show_core,
+                reverse_color=reverse_color,
                 scale=scale,
                 aspect_ratio=aspect_ratio,
             )
