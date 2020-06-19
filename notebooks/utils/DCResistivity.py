@@ -1200,7 +1200,7 @@ class DCRInversionApp(object):
             rho1,
             grid=show_grid,
             clim=(vmin, vmax),
-            pcolorOpts={"cmap": "jet_r"},
+            pcolorOpts={"cmap": "jet"},
             ax=ax1,
             gridOpts={"color": "white", "alpha": 0.5},
         )
@@ -1208,7 +1208,7 @@ class DCRInversionApp(object):
             rho2,
             grid=show_grid,
             clim=(vmin, vmax),
-            pcolorOpts={"cmap": "jet_r"},
+            pcolorOpts={"cmap": "jet"},
             ax=ax2,
             gridOpts={"color": "white", "alpha": 0.5},
         )
@@ -1280,7 +1280,7 @@ class DCRInversionApp(object):
             tmp,
             grid=show_grid,
             clim=(vmin, vmax),
-            pcolorOpts={"cmap": "jet_r"},
+            pcolorOpts={"cmap": "jet"},
             ax=ax,
             gridOpts={"color": "white", "alpha": 0.5},
         )
@@ -1397,7 +1397,7 @@ class DCRInversionApp(object):
             rho1,
             grid=show_grid,
             clim=(vmin, vmax),
-            pcolorOpts={"cmap": "jet_r"},
+            pcolorOpts={"cmap": "jet"},
             ax=ax,
             gridOpts={"color": "white", "alpha": 0.5},
         )
