@@ -27,38 +27,6 @@ from discretize import TensorMesh
 from discretize.utils import meshutils
 
 
-def in_hull(p, hull):
-    """
-    Test if points in `p` are in `hull`
-
-    `p` should be a `NxK` coordinates of `N` points in `K` dimensions
-    `hull` is either a scipy.spatial.Delaunay object or the `MxK` array of the
-    coordinates of `M` points in `K`dimensions for which Delaunay triangulation
-    will be computed
-    """
-    if not isinstance(hull, Delaunay):
-        hull = Delaunay(hull)
-
-    return hull.find_simplex(p) >= 0
-
-
-def get_contour_verts(cn):
-    contours = []
-    # for each contour line
-    for cc in cn.collections:
-        paths = []
-        # for each separate section of the contour line
-        for pp in cc.get_paths():
-            xy = []
-            # for each segment of that section
-            for vv in pp.iter_segments():
-                xy.append(vv[0])
-            paths.append(np.vstack(xy))
-        contours.append(paths)
-
-    return contours
-
-
 class DCRSimulationApp(object):
     """docstring for DCRSimulationApp"""
 
@@ -768,7 +736,7 @@ class DCRInversionApp(object):
             print ("warning: uncertainty includse zero values!")
 
         fig, ax = plt.subplots(1, 1, figsize=(12, 7))
-        
+
         dobs_sorted = np.sort(np.abs(self.survey.dobs))
         k = np.argsort(np.abs(self.survey.dobs))
         dunc_sorted = self.uncertainty[k]
@@ -1321,7 +1289,38 @@ class DCRInversionApp(object):
         tmp_contour[self.actind] = doi_index
         tmp_contour = np.ma.masked_array(tmp_contour, ~self.actind)
 
-        self.doi_inds = tmp_contour >= level
+        if self.mesh._meshType == 'TREE':
+            def up_search_tree(mesh, cell_ind, doi_index, level, in_doi, inds):
+                cell = mesh[cell_ind]
+                neighbors = cell.neighbors[3]  # +y inds
+                indoi = in_doi or (doi_index[cell_ind] < level)
+                if not indoi:
+                    inds.append(cell_ind)
+                if neighbors == -1:
+                    return inds
+                elif isinstance(neighbors, list):  # loop through neighbors
+                    for neighbor in neighbors:
+                        inds = up_search_tree(mesh, neighbor, doi_index, level, indoi, inds)
+                else:
+                    inds = up_search_tree(mesh, neighbors, doi_index, level, indoi, inds)
+                return inds
+            # get the cells at the bottom of the mesh
+            bottom_cells = self.mesh.cellBoundaryInd[2]
+            inds = []
+            for cell_ind in bottom_cells:
+                inds = up_search_tree(self.mesh, cell_ind, tmp, level, False, inds)
+        else:
+            tmp_meshed = tmp.reshape(self.mesh.vnC, order='F')
+            bot_surf_inds = np.zeros(self.mesh.nCx)
+            for ix in range(self.mesh.nCx):
+                ind = 0
+                while ind < self.mesh.nCy and tmp_meshed[ix, ind] >= level:
+                    ind += 1
+                bot_surf_inds[ix] = ind
+            inds = bot_surf_inds[:, None] >= np.arange(self.mesh.nCy)
+            inds = inds.reshape(-1, order='F')
+
+        self.doi_inds = inds
         self.doi_index = doi_index
 
         if self.mesh._meshType == 'TREE':
