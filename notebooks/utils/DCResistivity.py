@@ -1177,14 +1177,14 @@ class DCRInversionApp(object):
         reverse_color=False,
     ):
 
-        m1 = self.m[-1]
+        m1 = self.m[self.m_index]
         m2 = self.m_doi
         problem = self.get_problem()
         if scale == "log":
-            rho1 = np.log10(1.0 / (problem.sigmaMap * self.m[-1]))
+            rho1 = np.log10(1.0 / (problem.sigmaMap * self.m[self.m_index]))
             rho2 = np.log10(1.0 / (problem.sigmaMap * self.m_doi))
         elif scale == "linear":
-            rho1 = 1.0 / (problem.sigmaMap * self.m[-1])
+            rho1 = 1.0 / (problem.sigmaMap * self.m[self.m_index])
             rho2 = 1.0 / (problem.sigmaMap * self.m_doi)
 
         rho1[~self.actind] = np.nan
@@ -1267,7 +1267,7 @@ class DCRInversionApp(object):
         reverse_color=False
     ):
 
-        m1 = self.m[-1]
+        m1 = self.m[self.m_index]
         m2 = self.m_doi
 
         mref_1 = np.log(1.0 / self.rho_ref)
@@ -1394,9 +1394,9 @@ class DCRInversionApp(object):
     ):
         problem = self.get_problem()
         if scale == "log":
-            rho1 = np.log10(1.0 / (problem.sigmaMap * self.m[-1]))
+            rho1 = np.log10(1.0 / (problem.sigmaMap * self.m[self.m_index]))
         elif scale == "linear":
-            rho1 = 1.0 / (problem.sigmaMap * self.m[-1])
+            rho1 = 1.0 / (problem.sigmaMap * self.m[self.m_index])
 
         rho1[~self.actind] = np.nan
         rho1[self.doi_inds] = np.nan
@@ -1485,6 +1485,7 @@ class DCRInversionApp(object):
                     vmax=1,
                     level=doi_level,
                     aspect_ratio=aspect_ratio,
+                    reverse_color=reverse_color,
                 )
             elif plot_type == "final":
                 self.plot_model_with_doi(
@@ -1501,9 +1502,10 @@ class DCRInversionApp(object):
         except:
             print (">> an inversion for doi calculation is needed to be run")
 
-    def run_doi(self, factor, run=False):
+    def run_doi(self, factor, doi_iter, run=False):
         self.factor = factor
         self.doi = True
+        self.m_index = int(doi_iter - 1)
         if run:
             self.run_inversion(
                 self.rho_0 * factor,
@@ -1511,7 +1513,7 @@ class DCRInversionApp(object):
                 alpha_s=self.alpha_s,
                 alpha_x=self.alpha_x,
                 alpha_z=self.alpha_z,
-                maxIter=self.maxIter,
+                maxIter=doi_iter,
                 chifact=self.chifact,
                 beta0_ratio=self.beta0_ratio,
                 coolingFactor=self.coolingFactor,
@@ -1522,7 +1524,12 @@ class DCRInversionApp(object):
 
     def interact_run_doi(self):
 
-        widgets.interact(self.run_doi, factor=widgets.FloatText(0.5))
+        N = len(self.m)
+        widgets.interact(
+            self.run_doi,
+            factor=widgets.FloatText(0.5),
+            doi_iter=widgets.IntSlider(value=N, min=1, max=N)
+        )
 
     def interact_plot_doi_results(self):
         try:
@@ -1533,7 +1540,7 @@ class DCRInversionApp(object):
                 options=["log", "linear"], value="log", description="scale"
             )
 
-            rho = 1.0 / np.exp(self.m[-1])
+            rho = 1.0 / np.exp(self.m[self.m_index])
             rho_min = widgets.FloatText(
                 value=np.ceil(rho.min()),
                 continuous_update=False,
