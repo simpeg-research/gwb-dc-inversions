@@ -1509,7 +1509,10 @@ class DCRInversionApp(object):
 
     def interact_run_doi(self):
 
-        N = len(self.m)
+        try:
+            N = len(self.m)
+        except TypeError:
+            N = 1
         widgets.interact(
             self.run_doi,
             factor=widgets.FloatText(0.5),
