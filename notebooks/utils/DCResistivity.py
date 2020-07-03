@@ -13,6 +13,7 @@ from SimPEG.electromagnetics.static.utils import (
     genTopography, gen_DCIPsurvey, StaticUtils
 )
 import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm, Normalize
 import matplotlib
 import warnings
 warnings.filterwarnings("ignore")
@@ -557,7 +558,6 @@ class DCRInversionApp(object):
         return self._P
 
     def set_mesh(self, dx=None, dz=None, corezlength=None, show_core=None, xpad=None, zpad=None, mesh_type='TensorMesh'):
-    # (self, dx=None, dz=None, corezlength=None, npad_x=10, npad_z=10, i_src=None):
 
         sort_ind = np.argsort(self.IO.electrode_locations[:,0])
         if self.topo is None:
@@ -681,11 +681,6 @@ class DCRInversionApp(object):
                 print (">> or the input file format is wrong")
 
     def get_problem(self):
-        # if self.use_iterative is True:
-        #     store_J = False
-        #     solver_type = BicgJacobi
-        #     solver_type.tol = 1e-3
-        # else:
         store_J = True
         solver_type = Pardiso
 
@@ -1031,31 +1026,37 @@ class DCRInversionApp(object):
             ax.set_title(titles[i_ax])
             ax.set_aspect(aspect_ratio)
 
-    def plot_model(self, iteration, vmin=None, vmax=None, aspect_ratio=1, show_core=True, show_grid=False, reverse_color=False):
+    def plot_model(self, iteration, vmin=None, vmax=None, aspect_ratio=1, scale="log", show_core=True, show_grid=False, reverse_color=False):
         clim = (vmin, vmax)
         # inds_core, self. = Utils.ExtractCoreMesh(self.IO.xyzlim, self.mesh)
         fig, ax = plt.subplots(1,1, figsize=(10, 5))
-
-        tmp = np.log10(1./(self.problem.sigmaMap*self.m[iteration-1]))
+        tmp = 1./(self.problem.sigmaMap*self.m[iteration-1])
         tmp[~self.actind] = np.nan
         if clim is None:
             vmin, vmax = tmp[self.actind].min(), tmp[self.actind].max()
         else:
-            vmin, vmax = np.log10(clim[0]), np.log10(clim[1])
+            vmin, vmax = clim
 
-        if reverse_color==True:
-            cmap_type='jet_r'
+        if reverse_color:
+            cmap_type = 'jet_r'
         else:
-            cmap_type='jet'
+            cmap_type = 'jet'
+
+        if scale == "log":
+            norm = LogNorm(vmin, vmax)
+            ticks = np.logspace(np.log10(vmin), np.log10(vmax), 4)
+        else:
+            norm = Normalize(vmin, vmax)
+            ticks = np.linspace(vmin, vmax, 4)
 
         out = self.mesh.plotImage(
-            tmp, grid=show_grid, clim=(vmin, vmax), pcolorOpts={'cmap':cmap_type}, ax=ax,
+            tmp, grid=show_grid, clim=(vmin, vmax), pcolorOpts={'cmap':cmap_type, 'norm':norm}, ax=ax,
             gridOpts={"color": "white", "alpha": 0.5}
         )
-        ticks = np.linspace(vmin, vmax, 3)
-        cb = plt.colorbar(out[0], orientation='horizontal', fraction=0.03, ticks=ticks, ax=ax)
-        cb.set_ticklabels([("%.1f")%(10**tick)for tick in ticks])
-        # ax.plot(self.IO.electrode_locations[:,0], self.IO.electrode_locations[:,1], 'wo', markeredgecolor='k')
+        cb = plt.colorbar(out[0], orientation='horizontal', format="%.1f", fraction=0.06, ax=ax, ticks=ticks)
+        cb.ax.minorticks_off()
+        cb.ax.set_xlabel(r'Resistivity ($\Omega m$)')
+
         ax.set_xlabel("x (m)")
         ax.set_ylabel("z (m)")
         ax.set_aspect(aspect_ratio)
@@ -1077,27 +1078,28 @@ class DCRInversionApp(object):
     def plot_sensitivity(self, show_core, show_grid, scale, aspect_ratio):
         # inds_core, self. = Utils.ExtractCoreMesh(self.IO.xyzlim, self.mesh)
         fig, ax = plt.subplots(1, 1, figsize=(10, 5))
-        if scale == "log":
-            tmp = np.log10(self.JtJ)
-        elif scale == "linear":
-            tmp = self.JtJ
+        tmp = self.JtJ
         tmp[~self.actind] = np.nan
+        vmin, vmax = np.nanmin(tmp), np.nanmax(tmp)
+
+        if scale == "log":
+            norm = LogNorm(vmin, vmax)
+            ticks = np.logspace(np.log10(vmin), np.log10(vmax), 4)
+        else:
+            norm = Normalize(vmin, vmax)
+            ticks = np.linspace(vmin, vmax, 4)
+
         out = self.mesh.plotImage(
             tmp,
             grid=show_grid,
-            pcolorOpts={"cmap": "jet"},
+            pcolorOpts={"cmap": "jet",'norm':norm},
             ax=ax,
             gridOpts={"color": "white", "alpha": 0.5},
         )
-        vmin, vmax = out[0].get_clim()
-        ticks = np.linspace(vmin, vmax, 3)
         cb = plt.colorbar(
-            out[0], orientation="horizontal", fraction=0.03, ticks=ticks, ax=ax
+            out[0], orientation="horizontal", fraction=0.06, ticks=ticks, format="%.1f", ax=ax
         )
-        if scale == "log":
-            cb.set_ticklabels([("%.1e") % (10 ** tick) for tick in ticks])
-        elif scale == "linear":
-            cb.set_ticklabels([("%.1e") % (tick) for tick in ticks])
+        cb.ax.minorticks_off()
 
         ax.plot(
             self.IO.electrode_locations[:, 0],
@@ -1149,6 +1151,7 @@ class DCRInversionApp(object):
                 aspect_ratio=aspect_ratio,
                 show_core=show_core,
                 show_grid=show_grid,
+                scale=scale,
                 reverse_color=reverse_color
             )
         elif plot_type == "data_misfit":
@@ -1176,17 +1179,9 @@ class DCRInversionApp(object):
         aspect_ratio=1,
         reverse_color=False,
     ):
-
-        m1 = self.m[self.m_index]
-        m2 = self.m_doi
         problem = self.get_problem()
-        if scale == "log":
-            rho1 = np.log10(1.0 / (problem.sigmaMap * self.m[self.m_index]))
-            rho2 = np.log10(1.0 / (problem.sigmaMap * self.m_doi))
-        elif scale == "linear":
-            rho1 = 1.0 / (problem.sigmaMap * self.m[self.m_index])
-            rho2 = 1.0 / (problem.sigmaMap * self.m_doi)
-
+        rho1 = 1.0 / (problem.sigmaMap * self.m[self.m_index])
+        rho2 = 1.0 / (problem.sigmaMap * self.m_doi)
         rho1[~self.actind] = np.nan
         rho2[~self.actind] = np.nan
 
@@ -1196,9 +1191,13 @@ class DCRInversionApp(object):
             cmap = "jet"
 
         if scale == "log":
-            vmin, vmax = np.log10(vmin), np.log10(vmax)
+            norm = LogNorm(vmin, vmax)
+            ticks = np.logspace(np.log10(vmin), np.log10(vmax), 4)
+        else:
+            norm = Normalize(vmin, vmax)
+            ticks = np.linspace(vmin, vmax, 4)
 
-        fig, axs = plt.subplots(2, 1, figsize=(10, 5))
+        fig, axs = plt.subplots(2, 1, figsize=(10, 7))
         ax1 = axs[0]
         ax2 = axs[1]
 
@@ -1206,7 +1205,7 @@ class DCRInversionApp(object):
             rho1,
             grid=show_grid,
             clim=(vmin, vmax),
-            pcolorOpts={"cmap": cmap},
+            pcolorOpts={"cmap": cmap, 'norm':norm},
             ax=ax1,
             gridOpts={"color": "white", "alpha": 0.5},
         )
@@ -1214,21 +1213,12 @@ class DCRInversionApp(object):
             rho2,
             grid=show_grid,
             clim=(vmin, vmax),
-            pcolorOpts={"cmap": cmap},
+            pcolorOpts={"cmap": cmap, 'norm':norm},
             ax=ax2,
             gridOpts={"color": "white", "alpha": 0.5},
         )
-        ticks = np.linspace(vmin, vmax, 3)
 
         for ax in axs:
-
-            cb = plt.colorbar(
-                out[0], orientation="vertical", fraction=0.008, ticks=ticks, ax=ax
-            )
-            if scale == "log":
-                cb.set_ticklabels([("%.1f") % (10 ** tick) for tick in ticks])
-            elif scale == "linear":
-                cb.set_ticklabels([("%.1f") % (tick) for tick in ticks])
 
             ax.plot(
                 self.IO.electrode_locations[:, 0],
@@ -1251,6 +1241,10 @@ class DCRInversionApp(object):
                 dy = (ymax - ymin) / 10.0
                 ax.set_ylim(ymin, ymax + dy)
                 ax.set_xlim(xmin, xmax + dy)
+
+        cb = plt.colorbar(out[0], orientation='horizontal', format="%.1f", fraction=0.06, ax=ax2, ticks=ticks)
+        cb.ax.minorticks_off()
+        cb.ax.set_xlabel(r'Resistivity ($\Omega m$)')
 
         plt.tight_layout()
 
@@ -1351,11 +1345,8 @@ class DCRInversionApp(object):
         ax.clabel(cs, fmt="%.1f", colors="k", fontsize=12)  # contour line labels
 
         ticks = np.linspace(vmin, vmax, 3)
-
-        cb = plt.colorbar(
-            out[0], orientation="vertical", fraction=0.008, ticks=ticks, ax=ax
-        )
-        cb.set_ticklabels([("%.1f") % (tick) for tick in ticks])
+        cb = plt.colorbar(out[0], orientation='horizontal', format="%.1f", fraction=0.06, ax=ax, ticks=ticks)
+        cb.ax.minorticks_off()
 
 
         ax.plot(
@@ -1393,16 +1384,10 @@ class DCRInversionApp(object):
         reverse_color=False,
     ):
         problem = self.get_problem()
-        if scale == "log":
-            rho1 = np.log10(1.0 / (problem.sigmaMap * self.m[self.m_index]))
-        elif scale == "linear":
-            rho1 = 1.0 / (problem.sigmaMap * self.m[self.m_index])
+        rho1 = 1.0 / (problem.sigmaMap * self.m[self.m_index])
 
         rho1[~self.actind] = np.nan
         rho1[self.doi_inds] = np.nan
-
-        if scale == "log":
-            vmin, vmax = np.log10(vmin), np.log10(vmax)
 
         fig, ax = plt.subplots(1, 1, figsize=(10, 5))
 
@@ -1411,24 +1396,24 @@ class DCRInversionApp(object):
         else:
             cmap = "jet"
 
+        if scale == "log":
+            norm = LogNorm(vmin, vmax)
+            ticks = np.logspace(np.log10(vmin), np.log10(vmax), 4)
+        else:
+            norm = Normalize(vmin, vmax)
+            ticks = np.linspace(vmin, vmax, 4)
+
         out = self.mesh.plotImage(
             rho1,
             grid=show_grid,
             clim=(vmin, vmax),
-            pcolorOpts={"cmap": cmap},
+            pcolorOpts={"cmap": cmap, 'norm':norm},
             ax=ax,
             gridOpts={"color": "white", "alpha": 0.5},
         )
-
-        ticks = np.linspace(vmin, vmax, 3)
-
-        cb = plt.colorbar(
-            out[0], orientation="vertical", fraction=0.008, ticks=ticks, ax=ax
-        )
-        if scale == "log":
-            cb.set_ticklabels([("%.1f") % (10 ** tick) for tick in ticks])
-        elif scale == "linear":
-            cb.set_ticklabels([("%.1f") % (tick) for tick in ticks])
+        cb = plt.colorbar(out[0], orientation='horizontal', format="%.1f", fraction=0.06, ax=ax, ticks=ticks)
+        cb.ax.minorticks_off()
+        cb.ax.set_xlabel(r'Resistivity ($\Omega m$)')
 
         ax.plot(
             self.IO.electrode_locations[:, 0],
