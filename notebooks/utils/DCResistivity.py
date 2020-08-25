@@ -723,7 +723,7 @@ class DCRInversionApp(object):
 
         if set_value:
             self.uncertainty = abs(self.survey.dobs) * percentage / 100.+ floor
-            print ((">> percent error: %.1f and floor error: %1.e are set") % (percentage, floor))
+            print ((">> percent error: %.1f and floor error: %.2e are set") % (percentage, floor))
         else:
             self.uncertainty = self.survey.std.copy()
             print (">> uncertainty in the observation file is used")
@@ -737,13 +737,13 @@ class DCRInversionApp(object):
         dunc_sorted = self.uncertainty[k]
         x = np.linspace(1, len(dobs_sorted), len(dobs_sorted))
         if choice == 'linear':
-        	ax.plot(x, dobs_sorted-dunc_sorted, 'k:', x, dobs_sorted+dunc_sorted, 'k:')
-        	ax.fill_between(x, dobs_sorted-dunc_sorted, dobs_sorted+dunc_sorted, facecolor=[0.7, 0.7, 0.7], interpolate=True)
-        	ax.plot(x, dobs_sorted, 'k', lw=2)
+            ax.plot(x, dobs_sorted-dunc_sorted, 'k:', x, dobs_sorted+dunc_sorted, 'k:')
+            ax.fill_between(x, dobs_sorted-dunc_sorted, dobs_sorted+dunc_sorted, facecolor=[0.7, 0.7, 0.7], interpolate=True)
+            ax.plot(x, dobs_sorted, 'k', lw=2)
         else:
-        	ax.semilogx(x, dobs_sorted-dunc_sorted, 'k:', x, dobs_sorted+dunc_sorted, 'k:')
-        	ax.fill_between(x, dobs_sorted-dunc_sorted, dobs_sorted+dunc_sorted, facecolor=[0.7, 0.7, 0.7], interpolate=True)
-        	ax.semilogy(x, dobs_sorted, 'k', lw=2)
+            ax.semilogx(x, dobs_sorted-dunc_sorted, 'k:', x, dobs_sorted+dunc_sorted, 'k:')
+            ax.fill_between(x, dobs_sorted-dunc_sorted, dobs_sorted+dunc_sorted, facecolor=[0.7, 0.7, 0.7], interpolate=True)
+            ax.semilogy(x, dobs_sorted, 'k', lw=2)
 
         ax.set_xlabel("Datum")
         ax.set_ylabel("Volts")
@@ -1026,7 +1026,16 @@ class DCRInversionApp(object):
             ax.set_title(titles[i_ax])
             ax.set_aspect(aspect_ratio)
 
-    def plot_model(self, iteration, vmin=None, vmax=None, aspect_ratio=1, scale="log", show_core=True, show_grid=False, reverse_color=False):
+    def plot_model(
+        self, iteration, 
+        vmin=None, 
+        vmax=None, 
+        aspect_ratio=1, 
+        scale="log", 
+        show_core=True, 
+        show_grid=False, 
+        reverse_color=False
+    ):
         clim = (vmin, vmax)
         # inds_core, self. = Utils.ExtractCoreMesh(self.IO.xyzlim, self.mesh)
         fig, ax = plt.subplots(1,1, figsize=(10, 5))
@@ -1097,7 +1106,7 @@ class DCRInversionApp(object):
             gridOpts={"color": "white", "alpha": 0.5},
         )
         cb = plt.colorbar(
-            out[0], orientation="horizontal", fraction=0.06, ticks=ticks, format="%.1f", ax=ax
+            out[0], orientation="horizontal", fraction=0.06, ticks=ticks, format="%.1e", ax=ax
         )
         cb.ax.minorticks_off()
 
@@ -1218,7 +1227,7 @@ class DCRInversionApp(object):
             gridOpts={"color": "white", "alpha": 0.5},
         )
 
-        for ax in axs:
+        for ii, ax in enumerate(axs):
 
             ax.plot(
                 self.IO.electrode_locations[:, 0],
@@ -1226,7 +1235,10 @@ class DCRInversionApp(object):
                 "wo",
                 markeredgecolor="k",
             )
-            ax.set_xlabel("x (m)")
+            if ii!=0:
+                ax.set_xlabel("x (m)")
+            else:
+                ax.set_xlabel(" ")
             ax.set_ylabel("z (m)")
             ax.set_aspect(aspect_ratio)
             if show_core:
@@ -1242,11 +1254,11 @@ class DCRInversionApp(object):
                 ax.set_ylim(ymin, ymax + dy)
                 ax.set_xlim(xmin, xmax + dy)
 
-        cb = plt.colorbar(out[0], orientation='horizontal', format="%.1f", fraction=0.06, ax=ax2, ticks=ticks)
+        cb = fig.colorbar(out[0], ax=axs[:], format="%.1f", fraction=0.02, ticks=ticks, location='right')
+        cb.ax.set_ylabel(r'Resistivity ($\Omega m$)')
         cb.ax.minorticks_off()
-        cb.ax.set_xlabel(r'Resistivity ($\Omega m$)')
-
-        plt.tight_layout()
+    #     cb = plt.colorbar(out[0], orientation='horizontal', format="%.1f", fraction=0.02, ax=ax2, ticks=ticks)
+    #     plt.tight_layout()
 
     def plot_doi_index(
         self,
@@ -1593,11 +1605,11 @@ class DCRInversionApp(object):
         percentage = widgets.FloatText(value=5.)
         floor = widgets.FloatText(value=0.)
         choice = widgets.RadioButtons(
-        	options=['linear', 'log'],
-        	value='linear',
-    		description='Plotting Scale:',
-    		disabled=False
-    	)
+            options=['linear', 'log'],
+            value='linear',
+            description='Plotting Scale:',
+            disabled=False
+        )
         widgets.interact(
             self.set_uncertainty,
             percentage=percentage,
@@ -2142,7 +2154,7 @@ class DC1DInversionApp(object):
 
         if set_value:
             self.uncertainty = abs(self.data.dobs) * percentage / 100.+ floor
-            print ((">> percent error: %.1f and floor error: %1.e are set") % (percentage, floor))
+            print ((">> percent error: %.1f and floor error: %.2e are set") % (percentage, floor))
 
     def interact_set_uncertainty(self):
         percentage = widgets.FloatText(value=5.)
