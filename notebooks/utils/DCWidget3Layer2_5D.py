@@ -20,7 +20,7 @@ from SimPEG.electromagnetics.static import resistivity as DC
 from SimPEG.utils import ModelBuilder
 
 
-from ipywidgets import FloatSlider, FloatText, ToggleButtons
+from ipywidgets import FloatSlider, FloatText, ToggleButtons, Checkbox
 
 from .DCLayers import widgetify
 
@@ -182,6 +182,9 @@ def PLOT(
     Field,
     Type,
     Scale,
+    fixed=False,
+    rho_min=None,
+    rho_max=None,
 ):
     labelsize = 16.0
     ticksize = 16.0
@@ -224,9 +227,10 @@ def PLOT(
         rhoa = data_w.dobs[i_a]
     else:
         rhoa = data_s.dobs[i_a]
-
-    ax[0].plot(ab2s, data_w.dobs, 'r', lw=3, label='Wenner')
-    ax[0].plot(ab2s, data_s.dobs, 'b', lw=3, label='Schlumberger')
+    if survey_type == "Wenner":
+        ax[0].plot(ab2s, data_w.dobs, 'r', lw=3, label='Wenner')
+    elif survey_type == "Schlumberger":
+        ax[0].plot(ab2s, data_s.dobs, 'b', lw=3, label='Schlumberger')
     ax[0].plot([AB2], [rhoa], 'k', marker='*', markersize=labelsize)
     minrho = min(rho0, rho1, rho2)
     maxrho = max(rho0, rho1, rho2)
@@ -351,10 +355,10 @@ def PLOT(
         formatter = "%.1e"
 
         if Type == "Total":
-            u = total_field["q"]
+            u = -total_field["q"]
 
         elif Type == "Primary":
-            u = primary_field["q"]
+            u = -primary_field["q"]
 
         elif Type == "Secondary":
             uTotal = total_field["q"]
@@ -441,6 +445,8 @@ def PLOT(
     ax[1].set_xlim([xmin, xmax])
     ax[1].set_ylim([ymin, ymax])
     ax[1].set_aspect("equal")
+    if fixed:
+        ax[0].set_ylim(rho_min, rho_max)
 
     plt.show()
 
@@ -473,21 +479,21 @@ def ThreeLayer_app():
         rho0=FloatText(
             min=1e-8,
             max=1e8,
-            value=5000.0,
+            value=500.0,
             continuous_update=False,
             description="$\\rho_{1}$",
         ),
         rho1=FloatText(
             min=1e-8,
             max=1e8,
-            value=500.0,
+            value=100.0,
             continuous_update=False,
             description="$\\rho_{2}$",
         ),
         rho2=FloatText(
             min=1e-8,
             max=1e8,
-            value=5000.0,
+            value=500.0,
             continuous_update=False,
             description="$\\rho_{3}$",
         ),
@@ -497,5 +503,8 @@ def ThreeLayer_app():
         ),
         Type=ToggleButtons(options=["Total", "Primary", "Secondary"], value="Total"),
         Scale=ToggleButtons(options=["Linear", "Log"], value="Log"),
+        fixed=Checkbox(value=False),
+        rho_min=FloatText(value=0, min=1e-8, max=1e8, description="$\\rho_{min}$",),
+        rho_max=FloatText(value=0, min=1e-8, max=1e8, description="$\\rho_{max}$",),
     )
     return app
